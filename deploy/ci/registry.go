@@ -11,14 +11,15 @@ import (
 
 // CiInfrastructure represents the CI/CD infrastructure components
 type CiInfrastructure struct {
-	Registry                   *artifactregistry.Repository
-	GitHubActionsSA            *serviceaccount.Account
-	WorkloadIdentityPool       *iam.WorkloadIdentityPool
-	OidcProvider               *iam.WorkloadIdentityPoolProvider
-	RegistryUrl                pulumi.StringOutput
-	ServiceAccountEmail        pulumi.StringOutput
-	WorkloadIdentityPoolId     pulumi.StringOutput
-	WorkloadIdentityProviderId pulumi.StringOutput
+	Registry                    *artifactregistry.Repository
+	GitHubActionsServiceAccount *serviceaccount.Account
+	WorkloadIdentityPool        *iam.WorkloadIdentityPool
+	OidcProvider                *iam.WorkloadIdentityPoolProvider
+	RegistryUrl                 pulumi.StringOutput
+	ServiceAccountEmail         pulumi.StringOutput
+	WorkloadIdentityPoolId      pulumi.StringOutput
+	WorkloadIdentityProviderId  pulumi.StringOutput
+	ServiceAccountOidcMember    *serviceaccount.IAMMember
 }
 
 // NewCiInfrastructure creates CI/CD infrastructure for GitHub Actions
@@ -102,7 +103,7 @@ func NewCiInfrastructure(ctx *pulumi.Context, config *Config) (*CiInfrastructure
 
 	// Bind the service account to the workload identity pool
 	// This allows the service account to be impersonated by the workload identity pool
-	_, err = serviceaccount.NewIAMMember(ctx, fmt.Sprintf("%s-workload-identity-user", config.ResourcePrefix), &serviceaccount.IAMMemberArgs{
+	oidcMember, err := serviceaccount.NewIAMMember(ctx, fmt.Sprintf("%s-workload-identity-user", config.ResourcePrefix), &serviceaccount.IAMMemberArgs{
 		ServiceAccountId: githubActionsSA.Name,
 		Role:             pulumi.String("roles/iam.workloadIdentityUser"),
 		Member:           pulumi.Sprintf("principalSet://iam.googleapis.com/%s/attribute.repository/%s", workloadIdentityPool.Name, repoName),
@@ -127,11 +128,11 @@ func NewCiInfrastructure(ctx *pulumi.Context, config *Config) (*CiInfrastructure
 	registryUrl := pulumi.Sprintf("us-docker.pkg.dev/%s/%s", pulumi.String(config.GCPProject), pulumi.String(config.RepositoryName))
 
 	return &CiInfrastructure{
-		Registry:             registry,
-		GitHubActionsSA:      githubActionsSA,
-		WorkloadIdentityPool: workloadIdentityPool,
-		OidcProvider:         oidcProvider,
-		RegistryUrl:          registryUrl,
-		ServiceAccountEmail:  githubActionsSA.Email,
+		Registry:                    registry,
+		GitHubActionsServiceAccount: githubActionsSA,
+		ServiceAccountOidcMember:    oidcMember,
+		WorkloadIdentityPool:        workloadIdentityPool,
+		OidcProvider:                oidcProvider,
+		RegistryUrl:                 registryUrl,
 	}, nil
 }
