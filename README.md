@@ -1,17 +1,22 @@
 # pulumi-gcp-github-registry
 
-Pulumi Component to setup the CI/CD infrastructure required for GitHub Actions to access GCP with OIDC, and push images to Artifact Registry.
+Pulumi Component to setup an artifact registry repository, an OIDC identity provider for Github Actions, and the IAM required to auth via OIDC and push to the registry repository.
 
-This setup uses Workload [Identity Federation through a Service Account](https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#workload-identity-federation-through-a-service-account) to allow Github Actions to access GCP without long-lived credentials.
+Uses [Workload Identity Federation through a Service Account](https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#workload-identity-federation-through-a-service-account) to allow Github Actions to login to GCP with no creds. E.g.:
+
+```yaml
+- name: Authenticate to Google Cloud
+  uses: google-github-actions/auth@v2
+  with:
+    token_format: "access_token"
+    project_id: ${{ inputs.gcp-project }}
+    workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+    service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
+```
 
 See:
 - https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#setup
 - https://github.com/google-github-actions/auth/pull/348
-- https://github.com/google-github-actions/auth/blob/v2.1.10/docs/SECURITY_CONSIDERATIONS.md
-
-## Overview
-
-This component creates the necessary GCP infrastructure to support GitHub Actions CI/CD pipelines with secure authentication and container image management.
 
 ## Features
 
@@ -195,6 +200,9 @@ jobs:
 ## Repository Scoping
 
 This component implements security best practices for Workload Identity Federation by restricting OIDC authentication to specific GitHub repositories.
+
+See:
+- https://github.com/google-github-actions/auth/blob/v2.1.10/docs/SECURITY_CONSIDERATIONS.md
 
 ### Security Configuration
 
