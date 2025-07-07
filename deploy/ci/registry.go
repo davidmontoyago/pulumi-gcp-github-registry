@@ -50,53 +50,10 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		return nil, err
 	}
 
-	// Create OIDC workload identity pool for GitHub Actions
-	identityPoolName := fmt.Sprintf("%s-github-actions-pool", config.ResourcePrefix)
-	identityPoolName = capToMax(identityPoolName, 32)
-
-	workloadIdentityPool, err := iam.NewWorkloadIdentityPool(ctx, identityPoolName, &iam.WorkloadIdentityPoolArgs{
-		WorkloadIdentityPoolId: pulumi.String(identityPoolName),
-		Project:                pulumi.String(config.GCPProject),
-		DisplayName:            pulumi.String("GitHub Actions Workload Pool"),
-		Description:            pulumi.String("Workload identity pool for GitHub Actions"),
-		Disabled:               pulumi.Bool(false),
-	})
-	if err != nil {
-		return nil, err
-	}
+	repoName := extractRepoName(config.AllowedRepoURL)
 
 	// Create OIDC provider for GitHub Actions
-	identityProviderName := fmt.Sprintf("%s-%s", config.ResourcePrefix, config.IdentityPoolProviderName)
-	identityProviderName = capToMax(identityProviderName, 32)
-
-	repoName := config.AllowedRepoURL
-	if len(config.AllowedRepoURL) > 19 && config.AllowedRepoURL[:19] == "https://github.com/" {
-		repoName = config.AllowedRepoURL[19:]
-	}
-
-	oidcProvider, err := iam.NewWorkloadIdentityPoolProvider(ctx, identityProviderName, &iam.WorkloadIdentityPoolProviderArgs{
-		WorkloadIdentityPoolId:         workloadIdentityPool.WorkloadIdentityPoolId,
-		WorkloadIdentityPoolProviderId: pulumi.String(identityProviderName),
-		Project:                        pulumi.String(config.GCPProject),
-		DisplayName:                    pulumi.String("GitHub Actions OIDC Provider"),
-		Description:                    pulumi.String("OIDC provider for GitHub Actions"),
-		Disabled:                       pulumi.Bool(false),
-		AttributeMapping: pulumi.StringMap{
-			"google.subject":       pulumi.String("assertion.sub"),
-			"attribute.repository": pulumi.String("assertion.repository"),
-			"attribute.actor":      pulumi.String("assertion.actor"),
-			"attribute.ref":        pulumi.String("assertion.ref"),
-			"attribute.sha":        pulumi.String("assertion.sha"),
-			"attribute.workflow":   pulumi.String("assertion.workflow"),
-			"attribute.head_ref":   pulumi.String("assertion.head_ref"),
-			"attribute.base_ref":   pulumi.String("assertion.base_ref"),
-			"attribute.aud":        pulumi.String("assertion.aud"),
-		},
-		Oidc: &iam.WorkloadIdentityPoolProviderOidcArgs{
-			IssuerUri: pulumi.String("https://token.actions.githubusercontent.com"),
-		},
-		AttributeCondition: pulumi.Sprintf(`attribute.repository == "%s"`, repoName),
-	})
+	oidcProvider, workloadIdentityPool, err := newGithubActionsOIDCProvider(ctx, config, repoName)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +63,11 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 	oidcMember, err := serviceaccount.NewIAMMember(ctx, fmt.Sprintf("%s-workload-identity-user", config.ResourcePrefix), &serviceaccount.IAMMemberArgs{
 		ServiceAccountId: githubActionsSA.Name,
 		Role:             pulumi.String("roles/iam.workloadIdentityUser"),
-		Member:           pulumi.Sprintf("principalSet://iam.googleapis.com/%s/attribute.repository/%s", workloadIdentityPool.Name, repoName),
+		Member: pulumi.Sprintf(
+			"principalSet://iam.googleapis.com/%s/attribute.repository/%s",
+			workloadIdentityPool.Name,
+			repoName,
+		),
 	})
 	if err != nil {
 		return nil, err
@@ -142,4 +103,63 @@ func capToMax(identityProviderName string, max int) string {
 		identityProviderName = identityProviderName[:max]
 	}
 	return identityProviderName
+}
+
+// newGithubActionsOIDCProvider creates a new OIDC provider for GitHub Actions
+func newGithubActionsOIDCProvider(ctx *pulumi.Context, config *Config, repoName string) (*iam.WorkloadIdentityPoolProvider, *iam.WorkloadIdentityPool, error) {
+	// Create OIDC workload identity pool for GitHub Actions
+	identityPoolName := fmt.Sprintf("%s-github-actions-pool", config.ResourcePrefix)
+	identityPoolName = capToMax(identityPoolName, 32)
+
+	identityPool, err := iam.NewWorkloadIdentityPool(ctx, identityPoolName, &iam.WorkloadIdentityPoolArgs{
+		WorkloadIdentityPoolId: pulumi.String(identityPoolName),
+		Project:                pulumi.String(config.GCPProject),
+		DisplayName:            pulumi.String("GitHub Actions Workload Pool"),
+		Description:            pulumi.String("Workload identity pool for GitHub Actions"),
+		Disabled:               pulumi.Bool(false),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Create OIDC provider for GitHub Actions
+	identityProviderName := fmt.Sprintf("%s-%s", config.ResourcePrefix, config.IdentityPoolProviderName)
+	identityProviderName = capToMax(identityProviderName, 32)
+
+	oidcProvider, err := iam.NewWorkloadIdentityPoolProvider(ctx, identityProviderName, &iam.WorkloadIdentityPoolProviderArgs{
+		WorkloadIdentityPoolId:         identityPool.WorkloadIdentityPoolId,
+		WorkloadIdentityPoolProviderId: pulumi.String(identityProviderName),
+		Project:                        pulumi.String(config.GCPProject),
+		DisplayName:                    pulumi.String("GitHub Actions OIDC Provider"),
+		Description:                    pulumi.String("OIDC provider for GitHub Actions"),
+		Disabled:                       pulumi.Bool(false),
+		AttributeMapping: pulumi.StringMap{
+			"google.subject":       pulumi.String("assertion.sub"),
+			"attribute.repository": pulumi.String("assertion.repository"),
+			"attribute.actor":      pulumi.String("assertion.actor"),
+			"attribute.ref":        pulumi.String("assertion.ref"),
+			"attribute.sha":        pulumi.String("assertion.sha"),
+			"attribute.workflow":   pulumi.String("assertion.workflow"),
+			"attribute.head_ref":   pulumi.String("assertion.head_ref"),
+			"attribute.base_ref":   pulumi.String("assertion.base_ref"),
+			"attribute.aud":        pulumi.String("assertion.aud"),
+		},
+		Oidc: &iam.WorkloadIdentityPoolProviderOidcArgs{
+			IssuerUri: pulumi.String("https://token.actions.githubusercontent.com"),
+		},
+		AttributeCondition: pulumi.Sprintf(`attribute.repository == "%s"`, repoName),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return oidcProvider, identityPool, nil
+}
+
+// extractRepoName extracts the repository name from a GitHub URL
+func extractRepoName(repoURL string) string {
+	if len(repoURL) > 19 && repoURL[:19] == "https://github.com/" {
+		return repoURL[19:]
+	}
+	return repoURL
 }
