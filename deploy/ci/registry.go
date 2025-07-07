@@ -25,8 +25,11 @@ type CiInfrastructure struct {
 // NewCiInfrastructure creates CI/CD infrastructure for GitHub Actions
 func NewCiInfrastructure(ctx *pulumi.Context, config *Config) (*CiInfrastructure, error) {
 	// Set up Artifact Registry for Docker images
-	registry, err := artifactregistry.NewRepository(ctx, fmt.Sprintf("%s-%s", config.ResourcePrefix, config.RepositoryName), &artifactregistry.RepositoryArgs{
-		RepositoryId: pulumi.String(config.RepositoryName),
+	repositoryName := fmt.Sprintf("%s-%s", config.ResourcePrefix, config.RepositoryName)
+	repositoryName = capToMax(repositoryName, 63)
+
+	registry, err := artifactregistry.NewRepository(ctx, repositoryName, &artifactregistry.RepositoryArgs{
+		RepositoryId: pulumi.String(repositoryName),
 		Location:     pulumi.String("us"),
 		Project:      pulumi.String(config.GCPProject),
 		Description:  pulumi.String("CI/CD Docker image registry"),
@@ -37,8 +40,11 @@ func NewCiInfrastructure(ctx *pulumi.Context, config *Config) (*CiInfrastructure
 	}
 
 	// Create a service account for GitHub Actions
-	githubActionsSA, err := serviceaccount.NewAccount(ctx, fmt.Sprintf("%s-github-actions-sa", config.ResourcePrefix), &serviceaccount.AccountArgs{
-		AccountId:   pulumi.Sprintf("%s-github-actions", pulumi.String(config.ResourcePrefix)),
+	serviceAccountName := fmt.Sprintf("%s-github-actions-sa", config.ResourcePrefix)
+	serviceAccountName = capToMax(serviceAccountName, 30)
+
+	githubActionsSA, err := serviceaccount.NewAccount(ctx, serviceAccountName, &serviceaccount.AccountArgs{
+		AccountId:   pulumi.String(serviceAccountName),
 		Project:     pulumi.String(config.GCPProject),
 		DisplayName: pulumi.String("GitHub Actions Service Account"),
 		Description: pulumi.String("Service account for GitHub Actions CI/CD"),
@@ -48,8 +54,11 @@ func NewCiInfrastructure(ctx *pulumi.Context, config *Config) (*CiInfrastructure
 	}
 
 	// Create OIDC workload identity pool for GitHub Actions
-	workloadIdentityPool, err := iam.NewWorkloadIdentityPool(ctx, fmt.Sprintf("%s-github-actions-pool", config.ResourcePrefix), &iam.WorkloadIdentityPoolArgs{
-		WorkloadIdentityPoolId: pulumi.Sprintf("%s-github-actions-pool", pulumi.String(config.ResourcePrefix)),
+	identityPoolName := fmt.Sprintf("%s-github-actions-pool", config.ResourcePrefix)
+	identityPoolName = capToMax(identityPoolName, 32)
+
+	workloadIdentityPool, err := iam.NewWorkloadIdentityPool(ctx, identityPoolName, &iam.WorkloadIdentityPoolArgs{
+		WorkloadIdentityPoolId: pulumi.String(identityPoolName),
 		Project:                pulumi.String(config.GCPProject),
 		DisplayName:            pulumi.String("GitHub Actions Workload Pool"),
 		Description:            pulumi.String("Workload identity pool for GitHub Actions"),
@@ -60,28 +69,17 @@ func NewCiInfrastructure(ctx *pulumi.Context, config *Config) (*CiInfrastructure
 	}
 
 	// Create OIDC provider for GitHub Actions
-	// Calculate the full resource name and cap it to 32 characters
-	resourceName := fmt.Sprintf("%s-%s", config.ResourcePrefix, config.IdentityPoolProviderName)
-	if len(resourceName) > 32 {
-		// Truncate from the right, preserving the prefix
-		prefixLength := len(config.ResourcePrefix) + 1 // +1 for the hyphen
-		remainingLength := 32 - prefixLength
-		if remainingLength > 0 {
-			resourceName = fmt.Sprintf("%s-%s", config.ResourcePrefix, config.IdentityPoolProviderName[:remainingLength])
-		} else {
-			// If prefix is too long, just use the prefix
-			resourceName = config.ResourcePrefix
-		}
-	}
+	identityProviderName := fmt.Sprintf("%s-%s", config.ResourcePrefix, config.IdentityPoolProviderName)
+	identityProviderName = capToMax(identityProviderName, 32)
 
 	repoName := config.AllowedRepoURL
 	if len(config.AllowedRepoURL) > 19 && config.AllowedRepoURL[:19] == "https://github.com/" {
 		repoName = config.AllowedRepoURL[19:]
 	}
 
-	oidcProvider, err := iam.NewWorkloadIdentityPoolProvider(ctx, resourceName, &iam.WorkloadIdentityPoolProviderArgs{
+	oidcProvider, err := iam.NewWorkloadIdentityPoolProvider(ctx, identityProviderName, &iam.WorkloadIdentityPoolProviderArgs{
 		WorkloadIdentityPoolId:         workloadIdentityPool.WorkloadIdentityPoolId,
-		WorkloadIdentityPoolProviderId: pulumi.String(config.IdentityPoolProviderName),
+		WorkloadIdentityPoolProviderId: pulumi.String(identityProviderName),
 		Project:                        pulumi.String(config.GCPProject),
 		DisplayName:                    pulumi.String("GitHub Actions OIDC Provider"),
 		Description:                    pulumi.String("OIDC provider for GitHub Actions"),
@@ -135,4 +133,11 @@ func NewCiInfrastructure(ctx *pulumi.Context, config *Config) (*CiInfrastructure
 		OidcProvider:                oidcProvider,
 		RegistryUrl:                 registryUrl,
 	}, nil
+}
+
+func capToMax(identityProviderName string, max int) string {
+	if len(identityProviderName) > max {
+		identityProviderName = identityProviderName[:max]
+	}
+	return identityProviderName
 }

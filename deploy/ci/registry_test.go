@@ -93,7 +93,7 @@ func TestNewCiInfrastructure(t *testing.T) {
 		config := &ci.Config{
 			GCPProject:               "test-project",
 			GCPRegion:                "us-central1",
-			ResourcePrefix:           "ci",
+			ResourcePrefix:           "ci-with-a-long-prefix",
 			RepositoryName:           "registry",
 			AllowedRepoURL:           "https://github.com/test/repo",
 			IdentityPoolProviderName: "github-actions-provider",
@@ -167,13 +167,14 @@ func TestNewCiInfrastructure(t *testing.T) {
 
 		assert.NotNil(t, infra.GitHubActionsServiceAccount)
 		assert.NotNil(t, infra.ServiceAccountOidcMember)
+
 		memberCh := make(chan string, 1)
 		infra.ServiceAccountOidcMember.Member.ApplyT(func(member string) string {
 			memberCh <- member
 			return member
 		})
 		member := <-memberCh
-		assert.Equal(t, member, "principalSet://iam.googleapis.com/ci-github-actions-pool/attribute.repository/test/repo")
+		assert.Equal(t, member, "principalSet://iam.googleapis.com/ci-with-a-long-prefix-github-act/attribute.repository/test/repo")
 
 		return nil
 	}, pulumi.WithMocks("project", "stack", &infraMocks{}))
