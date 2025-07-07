@@ -14,3 +14,10 @@ clean:
 clean-pulumi:
 	pulumi plugin rm --all --yes
 	pulumi install --reinstall
+
+lint:
+	docker run --rm -v $$(PWD):/app \
+	-v $$(go env GOCACHE):/.cache/go-build -e GOCACHE=/.cache/go-build \
+	-v $$(go env GOMODCACHE):/.cache/mod -e GOMODCACHE=/.cache/mod \
+	-w /app golangci/golangci-lint:v2.1.6 \
+	golangci-lint run --fix --verbose --output.text.colors
