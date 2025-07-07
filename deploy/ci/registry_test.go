@@ -10,68 +10,76 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockPulumiContext provides a mock context for testing
-type MockPulumiContext struct {
-	*pulumi.Context
-	exports map[string]interface{}
-}
-
-func NewMockPulumiContext() *MockPulumiContext {
-	return &MockPulumiContext{
-		exports: make(map[string]interface{}),
-	}
-}
-
-func (m *MockPulumiContext) Export(name string, value interface{}) {
-	m.exports[name] = value
-}
-
 type infraMocks struct{}
 
 func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
+	// Mock resource outputs for each resource type:
+	//
+	// gcp:artifactregistry/repository:Repository
+	//   - name: string (resource name)
+	//   - repositoryId: string (repository identifier)
+	//   - location: string (repository location, e.g., "us")
+	//   - project: string (GCP project ID)
+	//   - format: string (repository format, e.g., "DOCKER")
+	//
+	// gcp:serviceaccount/account:Account
+	//   - name: string (resource name)
+	//   - accountId: string (service account ID)
+	//   - project: string (GCP project ID)
+	//   - displayName: string (human-readable name)
+	//   - email: string (service account email, computed)
+	//
+	// gcp:iam/workloadIdentityPool:WorkloadIdentityPool
+	//   - name: string (resource name)
+	//   - workloadIdentityPoolId: string (pool identifier)
+	//   - project: string (GCP project ID)
+	//   - displayName: string (human-readable name)
+	//   - description: string (pool description)
+	//   - disabled: bool (whether pool is disabled)
+	//
+	// gcp:iam/workloadIdentityPoolProvider:WorkloadIdentityPoolProvider
+	//   - name: string (resource name)
+	//   - workloadIdentityPoolProviderId: string (provider identifier)
+	//   - project: string (GCP project ID)
+	//   - displayName: string (human-readable name)
+	//   - description: string (provider description)
+	//   - disabled: bool (whether provider is disabled)
+	//   - attributeMapping: map[string]string (OIDC attribute mappings)
+	//   - attributeCondition: string (CEL condition for attribute filtering)
+	//   - oidc: map[string]interface{} (OIDC configuration with issuerUri)
+	//
+	// gcp:serviceaccount/iAMMember:IAMMember
+	//   - role: string (IAM role, e.g., "roles/iam.workloadIdentityUser")
+	//   - member: string (principal to bind, e.g., "principalSet://...")
+	//   - serviceAccountId: string (service account identifier)
+	//
+	// gcp:artifactregistry/repositoryIamMember:RepositoryIamMember
+	//   - role: string (IAM role, e.g., "roles/artifactregistry.writer")
+	//   - member: string (principal to bind, e.g., "serviceAccount:...")
+	//   - repository: string (repository name reference)
+
 	outputs := map[string]interface{}{}
 	for k, v := range args.Inputs {
-		outputs[string(k)] = v // resource.PropertyKey to string
+		outputs[string(k)] = v
 	}
-	// Simulate IDs and outputs for each resource type
 	switch args.TypeToken {
 	case "gcp:artifactregistry/repository:Repository":
 		outputs["name"] = args.Name
-		outputs["repositoryId"] = outputs["repositoryId"]
-		outputs["location"] = outputs["location"]
-		outputs["project"] = outputs["project"]
-		outputs["format"] = outputs["format"]
+		// Expected outputs: name, repositoryId, location, project, format
 	case "gcp:serviceaccount/account:Account":
 		outputs["name"] = args.Name
-		outputs["accountId"] = outputs["accountId"]
-		outputs["project"] = outputs["project"]
-		outputs["displayName"] = outputs["displayName"]
 		outputs["email"] = args.Name + "@test-project.iam.gserviceaccount.com"
+		// Expected outputs: name, accountId, project, displayName, email
 	case "gcp:iam/workloadIdentityPool:WorkloadIdentityPool":
 		outputs["name"] = args.Name
-		outputs["workloadIdentityPoolId"] = outputs["workloadIdentityPoolId"]
-		outputs["project"] = outputs["project"]
-		outputs["displayName"] = outputs["displayName"]
-		outputs["description"] = outputs["description"]
-		outputs["disabled"] = outputs["disabled"]
+		// Expected outputs: name, workloadIdentityPoolId, project, displayName, description, disabled
 	case "gcp:iam/workloadIdentityPoolProvider:WorkloadIdentityPoolProvider":
 		outputs["name"] = args.Name
-		outputs["workloadIdentityPoolProviderId"] = outputs["workloadIdentityPoolProviderId"]
-		outputs["project"] = outputs["project"]
-		outputs["displayName"] = outputs["displayName"]
-		outputs["description"] = outputs["description"]
-		outputs["disabled"] = outputs["disabled"]
-		outputs["attributeMapping"] = outputs["attributeMapping"]
-		outputs["attributeCondition"] = outputs["attributeCondition"]
-		outputs["oidc"] = outputs["oidc"]
+		// Expected outputs: name, workloadIdentityPoolProviderId, project, displayName, description, disabled, attributeMapping, attributeCondition, oidc
 	case "gcp:serviceaccount/iAMMember:IAMMember":
-		outputs["role"] = outputs["role"]
-		outputs["member"] = outputs["member"]
-		outputs["serviceAccountId"] = outputs["serviceAccountId"]
+		// Expected outputs: role, member, serviceAccountId
 	case "gcp:artifactregistry/repositoryIamMember:RepositoryIamMember":
-		outputs["role"] = outputs["role"]
-		outputs["member"] = outputs["member"]
-		outputs["repository"] = outputs["repository"]
+		// Expected outputs: role, member, repository
 	}
 	return args.Name + "_id", resource.NewPropertyMapFromMap(outputs), nil
 }
