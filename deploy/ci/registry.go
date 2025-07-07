@@ -9,8 +9,8 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// CiInfrastructure represents the CI/CD infrastructure components
-type CiInfrastructure struct {
+// GithubGoogleRegistryStack represents the CI/CD infrastructure components
+type GithubGoogleRegistryStack struct {
 	Registry                    *artifactregistry.Repository
 	GitHubActionsServiceAccount *serviceaccount.Account
 	WorkloadIdentityPool        *iam.WorkloadIdentityPool
@@ -22,8 +22,8 @@ type CiInfrastructure struct {
 	ServiceAccountOidcMember    *serviceaccount.IAMMember
 }
 
-// NewCiInfrastructure creates CI/CD infrastructure for GitHub Actions
-func NewCiInfrastructure(ctx *pulumi.Context, config *Config) (*CiInfrastructure, error) {
+// NewGithubGoogleRegistryStack creates CI/CD infrastructure for GitHub Actions
+func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubGoogleRegistryStack, error) {
 	// Set up Artifact Registry for Docker images
 	repositoryName := fmt.Sprintf("%s-%s", config.ResourcePrefix, config.RepositoryName)
 	repositoryName = capToMax(repositoryName, 63)
@@ -125,7 +125,7 @@ func NewCiInfrastructure(ctx *pulumi.Context, config *Config) (*CiInfrastructure
 	// Create the registry URL
 	registryUrl := pulumi.Sprintf("us-docker.pkg.dev/%s/%s", pulumi.String(config.GCPProject), pulumi.String(config.RepositoryName))
 
-	return &CiInfrastructure{
+	return &GithubGoogleRegistryStack{
 		Registry:                    registry,
 		GitHubActionsServiceAccount: githubActionsSA,
 		ServiceAccountOidcMember:    oidcMember,

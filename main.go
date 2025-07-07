@@ -21,7 +21,7 @@ func main() {
 		log.Printf("GCP Region: %s", config.GCPRegion)
 
 		// Create CI/CD infrastructure
-		ciInfra, err := ci.NewCiInfrastructure(ctx, config)
+		ciInfra, err := ci.NewGithubGoogleRegistryStack(ctx, config)
 		if err != nil {
 			return err
 		}

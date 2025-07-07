@@ -99,7 +99,7 @@ func TestNewCiInfrastructure(t *testing.T) {
 			IdentityPoolProviderName: "github-actions-provider",
 		}
 
-		infra, err := ci.NewCiInfrastructure(ctx, config)
+		infra, err := ci.NewGithubGoogleRegistryStack(ctx, config)
 		require.NoError(t, err)
 
 		// 1. Workload identity pool config
