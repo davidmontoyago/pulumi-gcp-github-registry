@@ -1,0 +1,30 @@
+name: develop
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Clean dependencies
+        run: make clean
+
+      - name: Build backend
+        run: make build
+
+      - name: Run backend tests
+        run: make test
