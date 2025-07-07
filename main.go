@@ -28,11 +28,10 @@ func main() {
 
 		// Export the outputs for use in CI/CD
 		ctx.Export("registryURL", ciInfra.RegistryUrl)
-		ctx.Export("serviceAccountEmail", ciInfra.ServiceAccountEmail)
+		ctx.Export("serviceAccountEmail", pulumi.ToSecret(ciInfra.GitHubActionsServiceAccount.Email))
 		ctx.Export("workloadIdentityPoolID", pulumi.ToSecret(ciInfra.WorkloadIdentityPool.ID()))
 		ctx.Export("workloadIdentityProviderID", pulumi.ToSecret(ciInfra.OidcProvider.ID()))
-		ctx.Export("workloadIdentityProviderURN", pulumi.ToSecret(ciInfra.OidcProvider.URN()))
-		ctx.Export("workloadIdentityProviderAllowedRepo", ciInfra.OidcProvider.AttributeCondition)
+		ctx.Export("workloadIdentityProviderCondition", ciInfra.OidcProvider.AttributeCondition)
 
 		log.Println("CI/CD infrastructure deployment loaded and ready!")
 		return nil

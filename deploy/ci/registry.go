@@ -16,9 +16,6 @@ type GithubGoogleRegistryStack struct {
 	WorkloadIdentityPool        *iam.WorkloadIdentityPool
 	OidcProvider                *iam.WorkloadIdentityPoolProvider
 	RegistryUrl                 pulumi.StringOutput
-	ServiceAccountEmail         pulumi.StringOutput
-	WorkloadIdentityPoolId      pulumi.StringOutput
-	WorkloadIdentityProviderId  pulumi.StringOutput
 	ServiceAccountOidcMember    *serviceaccount.IAMMember
 }
 
@@ -88,6 +85,11 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 			"google.subject":       pulumi.String("assertion.sub"),
 			"attribute.repository": pulumi.String("assertion.repository"),
 			"attribute.actor":      pulumi.String("assertion.actor"),
+			"attribute.ref":        pulumi.String("assertion.ref"),
+			"attribute.sha":        pulumi.String("assertion.sha"),
+			"attribute.workflow":   pulumi.String("assertion.workflow"),
+			"attribute.head_ref":   pulumi.String("assertion.head_ref"),
+			"attribute.base_ref":   pulumi.String("assertion.base_ref"),
 			"attribute.aud":        pulumi.String("assertion.aud"),
 		},
 		Oidc: &iam.WorkloadIdentityPoolProviderOidcArgs{
