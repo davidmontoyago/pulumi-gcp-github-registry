@@ -57,11 +57,11 @@ func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource
 	//   - role: string (IAM role, e.g., "roles/artifactregistry.writer")
 	//   - member: string (principal to bind, e.g., "serviceAccount:...")
 	//   - repository: string (repository name reference)
-
 	outputs := map[string]interface{}{}
 	for k, v := range args.Inputs {
 		outputs[string(k)] = v
 	}
+
 	switch args.TypeToken {
 	case "gcp:artifactregistry/repository:Repository":
 		outputs["name"] = args.Name
@@ -81,14 +81,15 @@ func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource
 	case "gcp:artifactregistry/repositoryIamMember:RepositoryIamMember":
 		// Expected outputs: role, member, repository
 	}
+
 	return args.Name + "_id", resource.NewPropertyMapFromMap(outputs), nil
 }
 
-func (m *infraMocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
+func (m *infraMocks) Call(_ pulumi.MockCallArgs) (resource.PropertyMap, error) {
 	return resource.PropertyMap{}, nil
 }
 
-func TestNewCiInfrastructure(t *testing.T) {
+func TestNewGithubGoogleRegistryStack(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		config := &ci.Config{
 			GCPProject:               "test-project",
@@ -109,10 +110,13 @@ func TestNewCiInfrastructure(t *testing.T) {
 		// When ApplyT() is called, it schedules the function to run when the output becomes available.
 		// The channel allows us to wait for and capture the actual value for assertions.
 		attrMapCh := make(chan map[string]string, 1)
+
 		infra.OidcProvider.AttributeMapping.ToStringMapOutput().ApplyT(func(m map[string]string) map[string]string {
 			attrMapCh <- m
+
 			return m
 		})
+
 		attrMap := <-attrMapCh
 		assert.Equal(t, "assertion.sub", attrMap["google.subject"])
 		assert.Equal(t, "assertion.repository", attrMap["attribute.repository"])
@@ -120,10 +124,13 @@ func TestNewCiInfrastructure(t *testing.T) {
 		assert.Equal(t, "assertion.aud", attrMap["attribute.aud"])
 
 		condCh := make(chan *string, 1)
+
 		infra.OidcProvider.AttributeCondition.ApplyT(func(cond *string) *string {
 			condCh <- cond
+
 			return cond
 		})
+
 		cond := <-condCh
 		if cond != nil {
 			assert.Contains(t, *cond, "attribute.repository == ")
@@ -132,10 +139,13 @@ func TestNewCiInfrastructure(t *testing.T) {
 		}
 
 		issuerCh := make(chan *string, 1)
+
 		infra.OidcProvider.Oidc.IssuerUri().ApplyT(func(uri *string) *string {
 			issuerCh <- uri
+
 			return uri
 		})
+
 		issuer := <-issuerCh
 		if issuer != nil {
 			assert.Equal(t, "https://token.actions.githubusercontent.com", *issuer)
@@ -145,21 +155,27 @@ func TestNewCiInfrastructure(t *testing.T) {
 
 		// 2. Repository write access
 
-		regUrlCh := make(chan string, 1)
-		infra.RegistryUrl.ApplyT(func(url string) string {
-			regUrlCh <- url
+		regURLCh := make(chan string, 1)
+
+		infra.RegistryURL.ApplyT(func(url string) string {
+			regURLCh <- url
+
 			return url
 		})
-		regUrl := <-regUrlCh
-		assert.Contains(t, regUrl, "us-docker.pkg.dev/test-project/registry")
+
+		regURL := <-regURLCh
+		assert.Contains(t, regURL, "us-docker.pkg.dev/test-project/registry")
 
 		// 3. Resource name length constraint
 
 		nameCh := make(chan string, 1)
+
 		infra.OidcProvider.Name.ApplyT(func(name string) string {
 			nameCh <- name
+
 			return name
 		})
+
 		name := <-nameCh
 		assert.LessOrEqual(t, len(name), 32)
 
@@ -169,10 +185,13 @@ func TestNewCiInfrastructure(t *testing.T) {
 		assert.NotNil(t, infra.ServiceAccountOidcMember)
 
 		memberCh := make(chan string, 1)
+
 		infra.ServiceAccountOidcMember.Member.ApplyT(func(member string) string {
 			memberCh <- member
+
 			return member
 		})
+
 		member := <-memberCh
 		assert.Equal(t, member, "principalSet://iam.googleapis.com/ci-with-a-long-prefix-github-act/attribute.repository/test/repo")
 

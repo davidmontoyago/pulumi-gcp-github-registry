@@ -1,3 +1,4 @@
+// Package ci contains the infra required to setup a Github Actions pipeline with secure access to GCP
 package ci
 
 import (
@@ -15,7 +16,7 @@ type GithubGoogleRegistryStack struct {
 	GitHubActionsServiceAccount *serviceaccount.Account
 	WorkloadIdentityPool        *iam.WorkloadIdentityPool
 	OidcProvider                *iam.WorkloadIdentityPoolProvider
-	RegistryUrl                 pulumi.StringOutput
+	RegistryURL                 pulumi.StringOutput
 	ServiceAccountOidcMember    *serviceaccount.IAMMember
 }
 
@@ -86,7 +87,7 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 	}
 
 	// Create the registry URL
-	registryUrl := pulumi.Sprintf("us-docker.pkg.dev/%s/%s", pulumi.String(config.GCPProject), pulumi.String(config.RepositoryName))
+	registryURL := pulumi.Sprintf("us-docker.pkg.dev/%s/%s", pulumi.String(config.GCPProject), pulumi.String(config.RepositoryName))
 
 	return &GithubGoogleRegistryStack{
 		Registry:                    registry,
@@ -94,14 +95,15 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		ServiceAccountOidcMember:    oidcMember,
 		WorkloadIdentityPool:        workloadIdentityPool,
 		OidcProvider:                oidcProvider,
-		RegistryUrl:                 registryUrl,
+		RegistryURL:                 registryURL,
 	}, nil
 }
 
-func capToMax(identityProviderName string, max int) string {
-	if len(identityProviderName) > max {
-		identityProviderName = identityProviderName[:max]
+func capToMax(identityProviderName string, maxLen int) string {
+	if len(identityProviderName) > maxLen {
+		identityProviderName = identityProviderName[:maxLen]
 	}
+
 	return identityProviderName
 }
 
@@ -161,5 +163,6 @@ func extractRepoName(repoURL string) string {
 	if len(repoURL) > 19 && repoURL[:19] == "https://github.com/" {
 		return repoURL[19:]
 	}
+
 	return repoURL
 }

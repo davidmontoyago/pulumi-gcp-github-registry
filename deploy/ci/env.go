@@ -1,3 +1,4 @@
+// Package ci contains the infra required to setup a Github Actions pipeline with secure access to GCP
 package ci
 
 import (
@@ -21,6 +22,7 @@ type Config struct {
 // All environment variables are required and will cause an error if not set
 func LoadConfig() (*Config, error) {
 	var config Config
+
 	err := envconfig.Process("", &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load configuration from environment variables: %w", err)
