@@ -90,6 +90,8 @@ func (m *infraMocks) Call(_ pulumi.MockCallArgs) (resource.PropertyMap, error) {
 }
 
 func TestNewGithubGoogleRegistryStack(t *testing.T) {
+	t.Parallel()
+
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		config := &ci.Config{
 			GCPProject:               "test-project",
