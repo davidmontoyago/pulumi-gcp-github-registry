@@ -23,8 +23,19 @@ jobs:
       - name: Clean dependencies
         run: make clean
 
-      - name: Build backend
+      - name: Build
         run: make build
 
-      - name: Run backend tests
+      - name: Test
         run: make test
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint Go code
+        run: make lint
