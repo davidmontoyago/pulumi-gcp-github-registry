@@ -32,6 +32,8 @@ func main() {
 		ctx.Export("workloadIdentityPoolID", pulumi.ToSecret(ciInfra.WorkloadIdentityPool.ID()))
 		ctx.Export("workloadIdentityProviderID", pulumi.ToSecret(ciInfra.OidcProvider.ID()))
 		ctx.Export("workloadIdentityProviderCondition", ciInfra.OidcProvider.AttributeCondition)
+		ctx.Export("repositoryWorkloadID", ciInfra.RepositoryPrincipalID)
+
 		if config.CreateServiceAccount {
 			ctx.Export("serviceAccountEmail", pulumi.ToSecret(ciInfra.GitHubActionsServiceAccount.Email))
 		}

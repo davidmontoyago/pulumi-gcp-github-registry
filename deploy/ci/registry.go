@@ -58,7 +58,6 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		Project:    pulumi.String(config.GCPProject),
 		Role:       pulumi.String("roles/artifactregistry.writer"),
 		Member:     repoPrincipalID,
-		// Member:     pulumi.Sprintf("serviceAccount:%s", githubActionsSA.Email),
 	})
 	if err != nil {
 		return nil, err
@@ -66,7 +65,7 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 
 	var githubActionsSA *serviceaccount.Account
 	if config.CreateServiceAccount {
-		githubActionsSA, err = newServiceAccountForDelegation(ctx, config, repoPrincipalID)
+		githubActionsSA, err = newServiceAccountForDelegation(ctx, config)
 		if err != nil {
 			return nil, err
 		}
@@ -146,8 +145,7 @@ func newGithubActionsOIDCProvider(ctx *pulumi.Context, config *Config, repoName 
 }
 
 // newServiceAccountForDelegation creates a service account and binds it to the workload identity pool
-func newServiceAccountForDelegation(ctx *pulumi.Context, config *Config, repoPrincipalID pulumi.StringOutput) (*serviceaccount.Account, error) {
-
+func newServiceAccountForDelegation(ctx *pulumi.Context, config *Config) (*serviceaccount.Account, error) {
 	// Create a service account for GitHub Actions
 	serviceAccountName := fmt.Sprintf("%s-github-actions-sa", config.ResourcePrefix)
 	serviceAccountName = capToMax(serviceAccountName, 30)

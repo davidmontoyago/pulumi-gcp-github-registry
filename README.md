@@ -2,7 +2,7 @@
 
 Pulumi Component to setup an artifact registry repository, an OIDC identity provider for Github Actions, and the IAM required to login and push docker images to the registry.
 
-Favors [Direct Workload Identity Federation](https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#preferred-direct-workload-identity-federation) for Github Actions, but supports [Workload Identity Federation through a Service Account](https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#workload-identity-federation-through-a-service-account) (`CREATE_SERVICE_ACCOUNT=true`) for cases when a GSA is required. Both approaches avoid long-lived access credentials.
+Favors [Direct Workload Identity Federation](https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#preferred-direct-workload-identity-federation) for Github Actions, but supports [Workload Identity Federation through a Service Account](https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#workload-identity-federation-through-a-service-account) (`CREATE_SERVICE_ACCOUNT=true`) for cases when a GSA is required. Both approaches avoid long-lived access credentials. E.g.:
 
 ```yaml
 - name: Authenticate to Google Cloud
@@ -23,7 +23,7 @@ See:
 1. **Artifact Registry Repository**
    - Docker image storage for CI/CD builds
    - Configured with appropriate IAM permissions
-   - Region-specific deployment
+   - Region-specific or multi-region deployment
 
 2. **Workload Identity Federation**
    - OIDC-based authentication for GitHub Actions
@@ -67,9 +67,8 @@ func main() {
 
         // Export outputs for GitHub Actions
         ctx.Export("registryURL", ciInfra.RegistryURL)
-        ctx.Export("workloadIdentityPoolID", pulumi.ToSecret(ciInfra.WorkloadIdentityPool.ID()))
         ctx.Export("workloadIdentityProviderID", pulumi.ToSecret(ciInfra.OidcProvider.ID()))
-        ctx.Export("workloadIdentityProviderCondition", ciInfra.OidcProvider.AttributeCondition)
+        ctx.Export("repositoryWorkloadID", ciInfra.RepositoryPrincipalID)
 
         return nil
     })
@@ -104,7 +103,6 @@ Add the following secrets to your GitHub repository:
 env:
   GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
   WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-  SERVICE_ACCOUNT_EMAIL: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
 ```
 
 2. **Authenticate with GCP**
@@ -112,13 +110,12 @@ env:
 Use the `google-github-actions/auth` action to authenticate:
 
 ```yaml
-- name: Authenticate to Google Cloud
+- name: Google Auth
+  id: auth
   uses: google-github-actions/auth@v2
   with:
-    token_format: "access_token"
     project_id: ${{ inputs.gcp-project }}
-    workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-    service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
+    workload_identity_provider: ${{ inputs.workload-identity-provider }}
 
 - name: Set up Cloud SDK
   uses: google-github-actions/setup-gcloud@v2
@@ -128,7 +125,7 @@ Use the `google-github-actions/auth` action to authenticate:
   with:
     registry: ${{ inputs.registry-url }}
     username: oauth2accesstoken
-    password: ${{ steps.auth.outputs.access_token }}
+    password: ${{ steps.auth.outputs.auth_token }}
 
 - name: Build Docker image
   shell: bash
@@ -150,7 +147,6 @@ on:
 env:
   GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
   WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-  SERVICE_ACCOUNT_EMAIL: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
   REGISTRY_URL: ${{ secrets.REGISTRY_URL }}
 
 jobs:
@@ -164,12 +160,11 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Google Auth
+      id: auth
       uses: google-github-actions/auth@v2
       with:
-        token_format: "access_token"
         project_id: ${{ inputs.gcp-project }}
-        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
+        workload_identity_provider: ${{ inputs.workload-identity-provider }}
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
@@ -179,7 +174,7 @@ jobs:
       with:
         registry: ${{ inputs.registry-url }}
         username: oauth2accesstoken
-        password: ${{ steps.auth.outputs.access_token }}
+        password: ${{ steps.auth.outputs.auth_token }}
 
     - name: Build and Push Image
       run: |
@@ -274,8 +269,6 @@ Current stack outputs (1):
     workloadIdentityPoolID     [secret]
     workloadIdentityProviderID [secret]
     registryURL                us-docker.pkg.dev/my-project/registry
-    serviceAccountEmail        ci-github-actions@my-project.iam.gserviceaccount.com
-    workloadIdentityProviderCondition attribute.repository == "davidmontoyago/pulumi-gcp-github-registry"
 
 $ pulumi stack output --show-secrets
 Current stack outputs (1):
@@ -283,6 +276,4 @@ Current stack outputs (1):
     workloadIdentityPoolID     projects/123456789/locations/global/workloadIdentityPools/ci-github-actions-pool
     workloadIdentityProviderID projects/123456789/locations/global/workloadIdentityPools/ci-github-actions-pool/providers/ci-github-actions-provider
     registryURL                us-docker.pkg.dev/my-project/registry
-    serviceAccountEmail        ci-github-actions@my-project.iam.gserviceaccount.com
-    workloadIdentityProviderCondition attribute.repository == "davidmontoyago/pulumi-gcp-github-registry"
 ```
