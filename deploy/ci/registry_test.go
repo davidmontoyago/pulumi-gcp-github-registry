@@ -101,6 +101,9 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 			RepositoryName:           "registry",
 			AllowedRepoURL:           "https://github.com/test/repo",
 			IdentityPoolProviderName: "github-actions-provider",
+			RepositoryOwner:          "test",
+			RepositoryOwnerID:        "1234567890",
+			RepositoryID:             "1234567890",
 		}
 
 		infra, err := ci.NewGithubGoogleRegistryStack(ctx, config)
@@ -136,7 +139,10 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 
 		cond := <-condCh
 		if cond != nil {
-			assert.Contains(t, *cond, "attribute.repository == ")
+			assert.Contains(t, *cond, "attribute.repository == \"test/repo\"")
+			assert.Contains(t, *cond, "attribute.repository_owner == \"test\"")
+			assert.Contains(t, *cond, "attribute.repository_owner_id == \"1234567890\"")
+			assert.Contains(t, *cond, "attribute.repository_id == \"1234567890\"")
 		} else {
 			assert.Fail(t, "AttributeCondition should not be nil")
 		}

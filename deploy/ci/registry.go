@@ -121,21 +121,23 @@ func newGithubActionsOIDCProvider(ctx *pulumi.Context, config *Config, repoName 
 		Description:                    pulumi.String("OIDC provider for GitHub Actions"),
 		Disabled:                       pulumi.Bool(false),
 		AttributeMapping: pulumi.StringMap{
-			"google.subject":             pulumi.String("assertion.sub"),
-			"attribute.repository":       pulumi.String("assertion.repository"),
-			"attribute.repository_owner": pulumi.String("assertion.repository_owner"),
-			"attribute.actor":            pulumi.String("assertion.actor"),
-			"attribute.ref":              pulumi.String("assertion.ref"),
-			"attribute.sha":              pulumi.String("assertion.sha"),
-			"attribute.workflow":         pulumi.String("assertion.workflow"),
-			"attribute.head_ref":         pulumi.String("assertion.head_ref"),
-			"attribute.base_ref":         pulumi.String("assertion.base_ref"),
-			"attribute.aud":              pulumi.String("assertion.aud"),
+			"google.subject":                pulumi.String("assertion.sub"),
+			"attribute.repository":          pulumi.String("assertion.repository"),
+			"attribute.repository_owner":    pulumi.String("assertion.repository_owner"),
+			"attribute.repository_owner_id": pulumi.String("assertion.repository_owner_id"),
+			"attribute.repository_id":       pulumi.String("assertion.repository_id"),
+			"attribute.actor":               pulumi.String("assertion.actor"),
+			"attribute.ref":                 pulumi.String("assertion.ref"),
+			"attribute.sha":                 pulumi.String("assertion.sha"),
+			"attribute.workflow":            pulumi.String("assertion.workflow"),
+			"attribute.head_ref":            pulumi.String("assertion.head_ref"),
+			"attribute.base_ref":            pulumi.String("assertion.base_ref"),
+			"attribute.aud":                 pulumi.String("assertion.aud"),
 		},
 		Oidc: &iam.WorkloadIdentityPoolProviderOidcArgs{
 			IssuerUri: pulumi.String("https://token.actions.githubusercontent.com"),
 		},
-		AttributeCondition: pulumi.Sprintf(`attribute.repository == "%s"`, repoName),
+		AttributeCondition: pulumi.String(buildAttributeCondition(repoName, config)),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -181,4 +183,27 @@ func extractRepoName(repoURL string) string {
 	}
 
 	return repoURL
+}
+
+// buildAttributeCondition creates a secure attribute condition for the OIDC provider
+func buildAttributeCondition(repoName string, config *Config) string {
+	// Start with repository constraint
+	condition := fmt.Sprintf(`attribute.repository == "%s"`, repoName)
+
+	// Add repository owner constraint if provided
+	if config.RepositoryOwner != "" {
+		condition += fmt.Sprintf(` && attribute.repository_owner == "%s"`, config.RepositoryOwner)
+	}
+
+	// Add repository owner ID constraint if provided (recommended for security)
+	if config.RepositoryOwnerID != "" {
+		condition += fmt.Sprintf(` && attribute.repository_owner_id == "%s"`, config.RepositoryOwnerID)
+	}
+
+	// Add repository ID constraint if provided (recommended for security)
+	if config.RepositoryID != "" {
+		condition += fmt.Sprintf(` && attribute.repository_id == "%s"`, config.RepositoryID)
+	}
+
+	return condition
 }

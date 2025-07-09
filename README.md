@@ -79,16 +79,19 @@ func main() {
 
 The component uses environment variables for configuration:
 
-| Variable                      | Description                                         | Required | Default                                                        |
-| ----------------------------- | --------------------------------------------------- | -------- | -------------------------------------------------------------- |
-| `GCP_PROJECT`                 | GCP Project ID                                      | Yes      | -                                                              |
-| `GCP_REGION`                  | GCP Region for resources                            | Yes      | -                                                              |
-| `REPOSITORY_LOCATION`         | Artifact Registry location                          | No       | Value of `GCP_REGION`                                          |
-| `ALLOWED_REPO_URL`            | GitHub repository URL for workload identity access  | No       | `https://github.com/davidmontoyago/pulumi-gcp-github-registry` |
-| `IDENTITY_POOL_PROVIDER_NAME` | Workload identity pool provider name (max 32 chars) | No       | `github-actions-provider`                                      |
-| `RESOURCE_PREFIX`             | Prefix for resource names                           | No       | `ci`                                                           |
-| `REPOSITORY_NAME`             | Artifact Registry repository name                   | No       | `registry`                                                     |
-| `CREATE_SERVICE_ACCOUNT`      | Whether to create a GitHub Actions service account  | No       | `false`                                                        |
+| Variable                      | Description                                                    | Required | Default                                                        |
+| ----------------------------- | -------------------------------------------------------------- | -------- | -------------------------------------------------------------- |
+| `GCP_PROJECT`                 | GCP Project ID                                                 | Yes      | -                                                              |
+| `GCP_REGION`                  | GCP Region for resources                                       | Yes      | -                                                              |
+| `REPOSITORY_LOCATION`         | Artifact Registry location                                     | No       | Value of `GCP_REGION`                                          |
+| `ALLOWED_REPO_URL`            | GitHub repository URL for workload identity access             | No       | `https://github.com/davidmontoyago/pulumi-gcp-github-registry` |
+| `REPOSITORY_OWNER`            | GitHub repository owner (username/org) for additional security | No       | -                                                              |
+| `REPOSITORY_OWNER_ID`         | GitHub repository owner numeric ID (recommended for security)  | No       | -                                                              |
+| `REPOSITORY_ID`               | GitHub repository numeric ID (recommended for security)        | No       | -                                                              |
+| `IDENTITY_POOL_PROVIDER_NAME` | Workload identity pool provider name (max 32 chars)            | No       | `github-actions-provider`                                      |
+| `RESOURCE_PREFIX`             | Prefix for resource names                                      | No       | `ci`                                                           |
+| `REPOSITORY_NAME`             | Artifact Registry repository name                              | No       | `registry`                                                     |
+| `CREATE_SERVICE_ACCOUNT`      | Whether to create a GitHub Actions service account             | No       | `false`                                                        |
 
 ## GitHub Actions Integration
 
@@ -187,6 +190,7 @@ jobs:
 - **Workload Identity Federation**: Eliminates the need for long-lived service account keys
 - **Least Privilege Access**: Service account has minimal required permissions
 - **Repository Scoping**: OIDC provider can be configured to restrict access to specific repositories
+- **Repository Owner Constraints**: Additional security through owner username and numeric ID validation
 - **Audit Logging**: All operations are logged in GCP Cloud Audit Logs
 
 ## Repository Scoping
@@ -216,16 +220,19 @@ See:
 #### 3. **Comprehensive Attribute Mapping**
 The provider maps GitHub Actions context to GCP attributes for fine-grained control:
 
-| GitHub Attribute       | GCP Attribute          | Description                            |
-| ---------------------- | ---------------------- | -------------------------------------- |
-| `assertion.sub`        | `google.subject`       | Unique identifier for the workflow run |
-| `assertion.actor`      | `attribute.actor`      | GitHub username of the actor           |
-| `assertion.repository` | `attribute.repository` | Repository name (e.g., `owner/repo`)   |
-| `assertion.ref`        | `attribute.ref`        | Branch or tag reference                |
-| `assertion.sha`        | `attribute.sha`        | Commit SHA                             |
-| `assertion.workflow`   | `attribute.workflow`   | Workflow name                          |
-| `assertion.head_ref`   | `attribute.head_ref`   | PR head reference                      |
-| `assertion.base_ref`   | `attribute.base_ref`   | PR base reference                      |
+| GitHub Attribute                | GCP Attribute                   | Description                            |
+| ------------------------------- | ------------------------------- | -------------------------------------- |
+| `assertion.sub`                 | `google.subject`                | Unique identifier for the workflow run |
+| `assertion.actor`               | `attribute.actor`               | GitHub username of the actor           |
+| `assertion.repository`          | `attribute.repository`          | Repository name (e.g., `owner/repo`)   |
+| `assertion.repository_owner`    | `attribute.repository_owner`    | Repository owner (username/org)        |
+| `assertion.repository_owner_id` | `attribute.repository_owner_id` | Repository owner numeric ID            |
+| `assertion.repository_id`       | `attribute.repository_id`       | Repository numeric ID                  |
+| `assertion.ref`                 | `attribute.ref`                 | Branch or tag reference                |
+| `assertion.sha`                 | `attribute.sha`                 | Commit SHA                             |
+| `assertion.workflow`            | `attribute.workflow`            | Workflow name                          |
+| `assertion.head_ref`            | `attribute.head_ref`            | PR head reference                      |
+| `assertion.base_ref`            | `attribute.base_ref`            | PR base reference                      |
 
 ### Security Benefits
 

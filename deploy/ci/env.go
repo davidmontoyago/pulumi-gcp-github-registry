@@ -14,8 +14,14 @@ type Config struct {
 	// Supports both single region (e.g. us-central1, us-east1, etc.) and multi-region (e.g. us, europe, asia)
 	GCPRegion string `envconfig:"GCP_REGION" required:"true"`
 	// Repository location for Artifact Registry. Defaults to GCP_REGION but can be overridden for multi-region (e.g. us, europe, asia)
-	RepositoryLocation       string `envconfig:"REPOSITORY_LOCATION" default:""`
-	AllowedRepoURL           string `envconfig:"ALLOWED_REPO_URL" default:"https://github.com/davidmontoyago/pulumi-gcp-github-registry"`
+	RepositoryLocation string `envconfig:"REPOSITORY_LOCATION" default:""`
+	AllowedRepoURL     string `envconfig:"ALLOWED_REPO_URL" default:"https://github.com/davidmontoyago/pulumi-gcp-github-registry"`
+	// Repository owner (username or organization) for additional security constraints
+	RepositoryOwner string `envconfig:"REPOSITORY_OWNER" default:""`
+	// Repository owner numeric ID for additional security constraints (recommended)
+	RepositoryOwnerID string `envconfig:"REPOSITORY_OWNER_ID" default:""`
+	// Repository numeric ID for additional security constraints (recommended)
+	RepositoryID             string `envconfig:"REPOSITORY_ID" default:""`
 	IdentityPoolProviderName string `envconfig:"IDENTITY_POOL_PROVIDER_NAME" default:"github-actions-provider"`
 	ResourcePrefix           string `envconfig:"RESOURCE_PREFIX" default:"ci"`
 	RepositoryName           string `envconfig:"REPOSITORY_NAME" default:"registry"`
@@ -44,6 +50,19 @@ func LoadConfig() (*Config, error) {
 	log.Printf("  Resource Prefix: %s", config.ResourcePrefix)
 	log.Printf("  Repository Name: %s", config.RepositoryName)
 	log.Printf("  Allowed Repo URL: %s", config.AllowedRepoURL)
+
+	if config.RepositoryOwner != "" {
+		log.Printf("  Repository Owner: %s", config.RepositoryOwner)
+	}
+
+	if config.RepositoryOwnerID != "" {
+		log.Printf("  Repository Owner ID: %s", config.RepositoryOwnerID)
+	}
+
+	if config.RepositoryID != "" {
+		log.Printf("  Repository ID: %s", config.RepositoryID)
+	}
+
 	log.Printf("  Identity Pool Provider Name: %s", config.IdentityPoolProviderName)
 
 	return &config, nil
