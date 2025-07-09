@@ -84,6 +84,7 @@ The component uses environment variables for configuration:
 | ----------------------------- | --------------------------------------------------- | -------- | -------------------------------------------------------------- |
 | `GCP_PROJECT`                 | GCP Project ID                                      | Yes      | -                                                              |
 | `GCP_REGION`                  | GCP Region for resources                            | Yes      | -                                                              |
+| `REPOSITORY_LOCATION`         | Artifact Registry location                          | No       | Value of `GCP_REGION`                                          |
 | `ALLOWED_REPO_URL`            | GitHub repository URL for workload identity access  | No       | `https://github.com/davidmontoyago/pulumi-gcp-github-registry` |
 | `IDENTITY_POOL_PROVIDER_NAME` | Workload identity pool provider name (max 32 chars) | No       | `github-actions-provider`                                      |
 | `RESOURCE_PREFIX`             | Prefix for resource names                           | No       | `ci`                                                           |

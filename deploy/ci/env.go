@@ -10,8 +10,11 @@ import (
 
 // Config holds all the configuration from environment variables
 type Config struct {
-	GCPProject               string `envconfig:"GCP_PROJECT" required:"true"`
-	GCPRegion                string `envconfig:"GCP_REGION" required:"true"`
+	GCPProject string `envconfig:"GCP_PROJECT" required:"true"`
+	// Supports both single region (e.g. us-central1, us-east1, etc.) and multi-region (e.g. us, europe, asia)
+	GCPRegion string `envconfig:"GCP_REGION" required:"true"`
+	// Repository location for Artifact Registry. Defaults to GCP_REGION but can be overridden for multi-region (e.g. us, europe, asia)
+	RepositoryLocation       string `envconfig:"REPOSITORY_LOCATION" default:""`
 	AllowedRepoURL           string `envconfig:"ALLOWED_REPO_URL" default:"https://github.com/davidmontoyago/pulumi-gcp-github-registry"`
 	IdentityPoolProviderName string `envconfig:"IDENTITY_POOL_PROVIDER_NAME" default:"github-actions-provider"`
 	ResourcePrefix           string `envconfig:"RESOURCE_PREFIX" default:"ci"`
@@ -29,9 +32,15 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to load configuration from environment variables: %w", err)
 	}
 
+	// Set default repository location to GCP region if not specified
+	if config.RepositoryLocation == "" {
+		config.RepositoryLocation = config.GCPRegion
+	}
+
 	log.Printf("Configuration loaded successfully:")
 	log.Printf("  GCP Project: %s", config.GCPProject)
 	log.Printf("  GCP Region: %s", config.GCPRegion)
+	log.Printf("  Repository Location: %s", config.RepositoryLocation)
 	log.Printf("  Resource Prefix: %s", config.ResourcePrefix)
 	log.Printf("  Repository Name: %s", config.RepositoryName)
 	log.Printf("  Allowed Repo URL: %s", config.AllowedRepoURL)

@@ -96,6 +96,7 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 		config := &ci.Config{
 			GCPProject:               "test-project",
 			GCPRegion:                "us-central1",
+			RepositoryLocation:       "us",
 			ResourcePrefix:           "ci-with-a-long-prefix",
 			RepositoryName:           "registry",
 			AllowedRepoURL:           "https://github.com/test/repo",

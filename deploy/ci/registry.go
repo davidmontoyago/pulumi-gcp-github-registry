@@ -28,7 +28,7 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 
 	registry, err := artifactregistry.NewRepository(ctx, repositoryName, &artifactregistry.RepositoryArgs{
 		RepositoryId: pulumi.String(repositoryName),
-		Location:     pulumi.String("us"),
+		Location:     pulumi.String(config.RepositoryLocation),
 		Project:      pulumi.String(config.GCPProject),
 		Description:  pulumi.String("CI/CD Docker image registry"),
 		Format:       pulumi.String("DOCKER"),
@@ -54,7 +54,7 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 
 	repoIAMMember, err := artifactregistry.NewRepositoryIamMember(ctx, fmt.Sprintf("%s-registry-writer", config.ResourcePrefix), &artifactregistry.RepositoryIamMemberArgs{
 		Repository: registry.Name,
-		Location:   pulumi.String("us"),
+		Location:   pulumi.String(config.RepositoryLocation),
 		Project:    pulumi.String(config.GCPProject),
 		Role:       pulumi.String("roles/artifactregistry.writer"),
 		Member:     repoPrincipalID,
@@ -73,7 +73,7 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 	}
 
 	// Create the registry URL
-	registryURL := pulumi.Sprintf("us-docker.pkg.dev/%s/%s", pulumi.String(config.GCPProject), registry.Name)
+	registryURL := pulumi.Sprintf("%s-docker.pkg.dev/%s/%s", pulumi.String(config.RepositoryLocation), pulumi.String(config.GCPProject), registry.Name)
 
 	return &GithubGoogleRegistryStack{
 		RegistryURL:                 registryURL,
