@@ -166,7 +166,7 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 		})
 
 		regURL := <-regURLCh
-		assert.Contains(t, regURL, "us-docker.pkg.dev/test-project/registry")
+		assert.Contains(t, regURL, "us-docker.pkg.dev/test-project/ci-with-a-long-prefix-registry")
 
 		// 3. Resource name length constraint
 
@@ -181,14 +181,25 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 		name := <-nameCh
 		assert.LessOrEqual(t, len(name), 32)
 
-		// 4. GSA IAM member binding
+		// 4. Principal IAM bindings
 
-		assert.NotNil(t, infra.GitHubActionsServiceAccount)
-		assert.NotNil(t, infra.ServiceAccountOidcMember)
+		assert.NotNil(t, infra.RepositoryPrincipalID)
+		assert.NotNil(t, infra.RepositoryIAMMember)
+
+		principalCh := make(chan string, 1)
+
+		infra.RepositoryPrincipalID.ApplyT(func(principal string) string {
+			principalCh <- principal
+
+			return principal
+		})
+
+		principal := <-principalCh
+		assert.Equal(t, principal, "principalSet://iam.googleapis.com/ci-with-a-long-prefix-github-act/attribute.repository/test/repo")
 
 		memberCh := make(chan string, 1)
 
-		infra.ServiceAccountOidcMember.Member.ApplyT(func(member string) string {
+		infra.RepositoryIAMMember.Member.ApplyT(func(member string) string {
 			memberCh <- member
 
 			return member

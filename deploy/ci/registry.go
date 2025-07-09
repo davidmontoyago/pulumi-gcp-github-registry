@@ -12,12 +12,12 @@ import (
 
 // GithubGoogleRegistryStack represents the CI/CD infrastructure components
 type GithubGoogleRegistryStack struct {
-	Registry                    *artifactregistry.Repository
-	GitHubActionsServiceAccount *serviceaccount.Account
+	RegistryURL                 pulumi.StringOutput
 	WorkloadIdentityPool        *iam.WorkloadIdentityPool
 	OidcProvider                *iam.WorkloadIdentityPoolProvider
-	RegistryURL                 pulumi.StringOutput
-	ServiceAccountOidcMember    *serviceaccount.IAMMember
+	RepositoryPrincipalID       pulumi.StringOutput
+	RepositoryIAMMember         *artifactregistry.RepositoryIamMember
+	GitHubActionsServiceAccount *serviceaccount.Account
 }
 
 // NewGithubGoogleRegistryStack creates CI/CD infrastructure for GitHub Actions
@@ -37,20 +37,6 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		return nil, err
 	}
 
-	// Create a service account for GitHub Actions
-	serviceAccountName := fmt.Sprintf("%s-github-actions-sa", config.ResourcePrefix)
-	serviceAccountName = capToMax(serviceAccountName, 30)
-
-	githubActionsSA, err := serviceaccount.NewAccount(ctx, serviceAccountName, &serviceaccount.AccountArgs{
-		AccountId:   pulumi.String(serviceAccountName),
-		Project:     pulumi.String(config.GCPProject),
-		DisplayName: pulumi.String("GitHub Actions Service Account"),
-		Description: pulumi.String("Service account for GitHub Actions CI/CD"),
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	repoName := extractRepoName(config.AllowedRepoURL)
 
 	// Create OIDC provider for GitHub Actions
@@ -59,43 +45,43 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		return nil, err
 	}
 
-	// Bind the service account to the workload identity pool
-	// This allows the service account to be impersonated by the workload identity pool
-	oidcMember, err := serviceaccount.NewIAMMember(ctx, fmt.Sprintf("%s-workload-identity-user", config.ResourcePrefix), &serviceaccount.IAMMemberArgs{
-		ServiceAccountId: githubActionsSA.Name,
-		Role:             pulumi.String("roles/iam.workloadIdentityUser"),
-		Member: pulumi.Sprintf(
-			"principalSet://iam.googleapis.com/%s/attribute.repository/%s",
-			workloadIdentityPool.Name,
-			repoName,
-		),
-	})
-	if err != nil {
-		return nil, err
-	}
+	// Create service account and bind it to workload identity pool
+	repoPrincipalID := pulumi.Sprintf(
+		"principalSet://iam.googleapis.com/%s/attribute.repository/%s",
+		workloadIdentityPool.Name,
+		repoName,
+	)
 
-	// Grant the service account access to Artifact Registry
-	_, err = artifactregistry.NewRepositoryIamMember(ctx, fmt.Sprintf("%s-registry-writer", config.ResourcePrefix), &artifactregistry.RepositoryIamMemberArgs{
+	repoIAMMember, err := artifactregistry.NewRepositoryIamMember(ctx, fmt.Sprintf("%s-registry-writer", config.ResourcePrefix), &artifactregistry.RepositoryIamMemberArgs{
 		Repository: registry.Name,
 		Location:   pulumi.String("us"),
 		Project:    pulumi.String(config.GCPProject),
 		Role:       pulumi.String("roles/artifactregistry.writer"),
-		Member:     pulumi.Sprintf("serviceAccount:%s", githubActionsSA.Email),
+		Member:     repoPrincipalID,
+		// Member:     pulumi.Sprintf("serviceAccount:%s", githubActionsSA.Email),
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	var githubActionsSA *serviceaccount.Account
+	if config.CreateServiceAccount {
+		githubActionsSA, err = newServiceAccountForDelegation(ctx, config, repoPrincipalID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Create the registry URL
-	registryURL := pulumi.Sprintf("us-docker.pkg.dev/%s/%s", pulumi.String(config.GCPProject), pulumi.String(config.RepositoryName))
+	registryURL := pulumi.Sprintf("us-docker.pkg.dev/%s/%s", pulumi.String(config.GCPProject), registry.Name)
 
 	return &GithubGoogleRegistryStack{
-		Registry:                    registry,
-		GitHubActionsServiceAccount: githubActionsSA,
-		ServiceAccountOidcMember:    oidcMember,
+		RegistryURL:                 registryURL,
+		RepositoryPrincipalID:       repoPrincipalID,
+		RepositoryIAMMember:         repoIAMMember,
 		WorkloadIdentityPool:        workloadIdentityPool,
 		OidcProvider:                oidcProvider,
-		RegistryURL:                 registryURL,
+		GitHubActionsServiceAccount: githubActionsSA,
 	}, nil
 }
 
@@ -157,6 +143,37 @@ func newGithubActionsOIDCProvider(ctx *pulumi.Context, config *Config, repoName 
 	}
 
 	return oidcProvider, identityPool, nil
+}
+
+// newServiceAccountForDelegation creates a service account and binds it to the workload identity pool
+func newServiceAccountForDelegation(ctx *pulumi.Context, config *Config, repoPrincipalID pulumi.StringOutput) (*serviceaccount.Account, error) {
+
+	// Create a service account for GitHub Actions
+	serviceAccountName := fmt.Sprintf("%s-github-actions-sa", config.ResourcePrefix)
+	serviceAccountName = capToMax(serviceAccountName, 30)
+
+	githubActionsSA, err := serviceaccount.NewAccount(ctx, serviceAccountName, &serviceaccount.AccountArgs{
+		AccountId:   pulumi.String(serviceAccountName),
+		Project:     pulumi.String(config.GCPProject),
+		DisplayName: pulumi.String("GitHub Actions Service Account"),
+		Description: pulumi.String("Service account for GitHub Actions CI/CD"),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Bind the service account to the workload identity pool
+	// This allows the service account to be impersonated by the workload identity pool
+	_, err = serviceaccount.NewIAMMember(ctx, fmt.Sprintf("%s-workload-identity-user", config.ResourcePrefix), &serviceaccount.IAMMemberArgs{
+		ServiceAccountId: githubActionsSA.Name,
+		Role:             pulumi.String("roles/iam.workloadIdentityUser"),
+		Member:           pulumi.Sprintf("serviceAccount:%s", githubActionsSA.Email),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return githubActionsSA, nil
 }
 
 // extractRepoName extracts the repository name from a GitHub URL

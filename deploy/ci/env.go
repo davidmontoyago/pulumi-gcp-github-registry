@@ -12,10 +12,11 @@ import (
 type Config struct {
 	GCPProject               string `envconfig:"GCP_PROJECT" required:"true"`
 	GCPRegion                string `envconfig:"GCP_REGION" required:"true"`
-	ResourcePrefix           string `envconfig:"RESOURCE_PREFIX" default:"ci"`
-	RepositoryName           string `envconfig:"REPOSITORY_NAME" default:"registry"`
 	AllowedRepoURL           string `envconfig:"ALLOWED_REPO_URL" default:"https://github.com/davidmontoyago/pulumi-gcp-github-registry"`
 	IdentityPoolProviderName string `envconfig:"IDENTITY_POOL_PROVIDER_NAME" default:"github-actions-provider"`
+	ResourcePrefix           string `envconfig:"RESOURCE_PREFIX" default:"ci"`
+	RepositoryName           string `envconfig:"REPOSITORY_NAME" default:"registry"`
+	CreateServiceAccount     bool   `envconfig:"CREATE_SERVICE_ACCOUNT" default:"false"`
 }
 
 // LoadConfig loads configuration from environment variables

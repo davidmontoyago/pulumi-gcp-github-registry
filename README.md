@@ -1,22 +1,22 @@
 # pulumi-gcp-github-registry
 
-Pulumi Component to setup an artifact registry repository, an OIDC identity provider for Github Actions, and the IAM required to auth via OIDC and push to the registry repository.
+Pulumi Component to setup an artifact registry repository, an OIDC identity provider for Github Actions, and the IAM required to login and push docker images to the registry.
 
-Uses [Workload Identity Federation through a Service Account](https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#workload-identity-federation-through-a-service-account) to allow Github Actions to login to GCP with no creds. E.g.:
+Favors [Direct Workload Identity Federation](https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#preferred-direct-workload-identity-federation) for Github Actions, but supports [Workload Identity Federation through a Service Account](https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#workload-identity-federation-through-a-service-account) (`CREATE_SERVICE_ACCOUNT=true`) for cases when a GSA is required. Both approaches avoid long-lived access credentials.
 
 ```yaml
 - name: Authenticate to Google Cloud
   uses: google-github-actions/auth@v2
   with:
-    token_format: "access_token"
     project_id: ${{ inputs.gcp-project }}
     workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-    service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 ```
 
 See:
 - https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#setup
 - https://github.com/google-github-actions/auth/pull/348
+- https://github.com/docker/login-action/issues/640
+- https://github.com/docker/login-action?tab=readme-ov-file#google-artifact-registry-gar
 
 ## Features
 
@@ -25,19 +25,14 @@ See:
    - Configured with appropriate IAM permissions
    - Region-specific deployment
 
-2. **GitHub Actions Service Account**
-   - Dedicated service account for CI/CD operations
-   - Minimal required permissions following security best practices
-   - Clear naming and description for easy identification
-
-3. **Workload Identity Federation**
+2. **Workload Identity Federation**
    - OIDC-based authentication for GitHub Actions
    - Secure token exchange without long-lived credentials
    - Attribute mapping for repository and actor-based access control
 
-4. **IAM Integration**
+3. **IAM Integration**
    - Automatic permission assignment for Artifact Registry access
-   - Service account binding to workload identity pool
+   - Optional service account binding to workload identity pool
    - Configurable role assignments
 
 ## Install
@@ -71,10 +66,10 @@ func main() {
         }
 
         // Export outputs for GitHub Actions
-        ctx.Export("registryURL", ciInfra.RegistryUrl)
-        ctx.Export("serviceAccountEmail", ciInfra.GitHubActionsServiceAccount.Email)
+        ctx.Export("registryURL", ciInfra.RegistryURL)
         ctx.Export("workloadIdentityPoolID", pulumi.ToSecret(ciInfra.WorkloadIdentityPool.ID()))
         ctx.Export("workloadIdentityProviderID", pulumi.ToSecret(ciInfra.OidcProvider.ID()))
+        ctx.Export("workloadIdentityProviderCondition", ciInfra.OidcProvider.AttributeCondition)
 
         return nil
     })
@@ -89,10 +84,11 @@ The component uses environment variables for configuration:
 | ----------------------------- | --------------------------------------------------- | -------- | -------------------------------------------------------------- |
 | `GCP_PROJECT`                 | GCP Project ID                                      | Yes      | -                                                              |
 | `GCP_REGION`                  | GCP Region for resources                            | Yes      | -                                                              |
-| `RESOURCE_PREFIX`             | Prefix for resource names                           | No       | `ci`                                                           |
-| `REPOSITORY_NAME`             | Artifact Registry repository name                   | No       | `registry`                                                     |
 | `ALLOWED_REPO_URL`            | GitHub repository URL for workload identity access  | No       | `https://github.com/davidmontoyago/pulumi-gcp-github-registry` |
 | `IDENTITY_POOL_PROVIDER_NAME` | Workload identity pool provider name (max 32 chars) | No       | `github-actions-provider`                                      |
+| `RESOURCE_PREFIX`             | Prefix for resource names                           | No       | `ci`                                                           |
+| `REPOSITORY_NAME`             | Artifact Registry repository name                   | No       | `registry`                                                     |
+| `CREATE_SERVICE_ACCOUNT`      | Whether to create a GitHub Actions service account  | No       | `false`                                                        |
 
 ## GitHub Actions Integration
 
