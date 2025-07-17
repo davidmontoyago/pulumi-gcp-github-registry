@@ -191,7 +191,7 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 		// 4. Principal IAM bindings
 
 		assert.NotNil(t, infra.RepositoryPrincipalID)
-		assert.NotNil(t, infra.RepositoryIAMMember)
+		assert.NotNil(t, infra.RepositoryIAMMembers)
 
 		principalCh := make(chan string, 1)
 
@@ -204,16 +204,39 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 		principal := <-principalCh
 		assert.Equal(t, principal, "principalSet://iam.googleapis.com/ci-with-a-long-prefix-github-act/attribute.repository/test/repo")
 
+		// ------- Registry writer IAM -------
+
 		memberCh := make(chan string, 1)
 
-		infra.RepositoryIAMMember.Member.ApplyT(func(member string) string {
+		infra.RepositoryIAMMembers[0].Member.ApplyT(func(member string) string {
 			memberCh <- member
 
 			return member
 		})
 
-		member := <-memberCh
-		assert.Equal(t, member, "principalSet://iam.googleapis.com/ci-with-a-long-prefix-github-act/attribute.repository/test/repo")
+		firstMember := <-memberCh
+		assert.Equal(t, firstMember, "principalSet://iam.googleapis.com/ci-with-a-long-prefix-github-act/attribute.repository/test/repo")
+
+		roleCh := make(chan string, 1)
+		infra.RepositoryIAMMembers[0].Role.ApplyT(func(role string) string {
+			roleCh <- role
+
+			return role
+		})
+
+		firstRole := <-roleCh
+		assert.Equal(t, firstRole, "roles/artifactregistry.writer")
+
+		// ------- SBOM IAM -------
+
+		infra.RepositoryIAMMembers[1].Role.ApplyT(func(role string) string {
+			roleCh <- role
+
+			return role
+		})
+
+		secondRole := <-roleCh
+		assert.Equal(t, secondRole, "roles/containeranalysis.notes.editor")
 
 		return nil
 	}, pulumi.WithMocks("project", "stack", &infraMocks{}))

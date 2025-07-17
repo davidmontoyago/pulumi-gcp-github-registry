@@ -16,7 +16,7 @@ type GithubGoogleRegistryStack struct {
 	WorkloadIdentityPool        *iam.WorkloadIdentityPool
 	OidcProvider                *iam.WorkloadIdentityPoolProvider
 	RepositoryPrincipalID       pulumi.StringOutput
-	RepositoryIAMMember         *artifactregistry.RepositoryIamMember
+	RepositoryIAMMembers        []*artifactregistry.RepositoryIamMember
 	GitHubActionsServiceAccount *serviceaccount.Account
 }
 
@@ -52,15 +52,28 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		repoName,
 	)
 
-	repoIAMMember, err := artifactregistry.NewRepositoryIamMember(ctx, fmt.Sprintf("%s-registry-writer", config.ResourcePrefix), &artifactregistry.RepositoryIamMemberArgs{
-		Repository: registry.Name,
-		Location:   pulumi.String(config.RepositoryLocation),
-		Project:    pulumi.String(config.GCPProject),
-		Role:       pulumi.String("roles/artifactregistry.writer"),
-		Member:     repoPrincipalID,
-	})
-	if err != nil {
-		return nil, err
+	pipelineRoles := []string{
+		"roles/artifactregistry.writer",
+
+		// SBOM generation for container images
+		"roles/containeranalysis.notes.editor",
+		"roles/containeranalysis.occurrences.editor",
+	}
+
+	var repoIAMMembers []*artifactregistry.RepositoryIamMember
+	for _, role := range pipelineRoles {
+		bindingName := fmt.Sprintf("%s-iam-%s", config.ResourcePrefix, role)
+		member, err := artifactregistry.NewRepositoryIamMember(ctx, bindingName, &artifactregistry.RepositoryIamMemberArgs{
+			Repository: registry.Name,
+			Location:   pulumi.String(config.RepositoryLocation),
+			Project:    pulumi.String(config.GCPProject),
+			Role:       pulumi.String(role),
+			Member:     repoPrincipalID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		repoIAMMembers = append(repoIAMMembers, member)
 	}
 
 	var githubActionsSA *serviceaccount.Account
@@ -77,7 +90,7 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 	return &GithubGoogleRegistryStack{
 		RegistryURL:                 registryURL,
 		RepositoryPrincipalID:       repoPrincipalID,
-		RepositoryIAMMember:         repoIAMMember,
+		RepositoryIAMMembers:        repoIAMMembers,
 		WorkloadIdentityPool:        workloadIdentityPool,
 		OidcProvider:                oidcProvider,
 		GitHubActionsServiceAccount: githubActionsSA,

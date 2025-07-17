@@ -1,5 +1,7 @@
 # pulumi-gcp-github-registry
 
+[![develop](https://github.com/davidmontoyago/pulumi-gcp-github-registry/workflows/develop/badge.svg)](https://github.com/davidmontoyago/pulumi-gcp-github-registry/actions?query=workflow%3Adevelop)
+
 Pulumi Component to setup an artifact registry repository, an OIDC identity provider for Github Actions, and the IAM required to login and push docker images to the registry.
 
 Favors [Direct Workload Identity Federation](https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#preferred-direct-workload-identity-federation) for Github Actions, but supports [Workload Identity Federation through a Service Account](https://github.com/google-github-actions/auth/blob/v2.1.10/README.md#workload-identity-federation-through-a-service-account) (`CREATE_SERVICE_ACCOUNT=true`) for cases when a GSA is required. Both approaches avoid long-lived access credentials. E.g.:
@@ -8,7 +10,7 @@ Favors [Direct Workload Identity Federation](https://github.com/google-github-ac
 - name: Authenticate to Google Cloud
   uses: google-github-actions/auth@v2
   with:
-    project_id: ${{ inputs.gcp-project }}
+    project_id: ${{ env.GCP_PROJECT }}
     workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
 ```
 
@@ -32,7 +34,7 @@ See:
 
 3. **IAM Integration**
    - Automatic permission assignment for Artifact Registry access
-   - Optional service account binding to workload identity pool
+   - Optional service account and binding to workload identity pool
    - Configurable role assignments
 
 ## Install
@@ -117,16 +119,13 @@ Use the `google-github-actions/auth` action to authenticate:
   id: auth
   uses: google-github-actions/auth@v2
   with:
-    project_id: ${{ inputs.gcp-project }}
-    workload_identity_provider: ${{ inputs.workload-identity-provider }}
-
-- name: Set up Cloud SDK
-  uses: google-github-actions/setup-gcloud@v2
+    project_id: ${{ env.GCP_PROJECT }}
+    workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
 
 - name: Login to Google Artifact Registry
   uses: docker/login-action@v3
   with:
-    registry: ${{ inputs.registry-url }}
+    registry: ${{ env.REGISTRY_URL}}
     username: oauth2accesstoken
     password: ${{ steps.auth.outputs.auth_token }}
 
@@ -166,16 +165,17 @@ jobs:
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        project_id: ${{ inputs.gcp-project }}
-        workload_identity_provider: ${{ inputs.workload-identity-provider }}
+        project_id: ${{ env.GCP_PROJECT }}
+        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
 
+    # optionally get setup for gcloud commands
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
 
     - name: Login to Google Artifact Registry
       uses: docker/login-action@v3
       with:
-        registry: ${{ inputs.registry-url }}
+        registry: ${{ env.REGISTRY_URL }}
         username: oauth2accesstoken
         password: ${{ steps.auth.outputs.auth_token }}
 
