@@ -106,6 +106,7 @@ func grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactreg
 		// See: https://cloud.google.com/artifact-analysis/docs/generate-store-sboms
 		"roles/containeranalysis.notes.editor",
 		"roles/containeranalysis.occurrences.editor",
+		"roles/storage.bucketViewer",
 	}
 
 	// Assign repository-level IAM roles
