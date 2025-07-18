@@ -54,6 +54,36 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		repoName,
 	)
 
+	// Grant IAM permissions to the pipeline
+	repoIAMMembers, projectIAMMembers, err := grantPipelineIAM(ctx, config, registry, repoPrincipalID)
+	if err != nil {
+		return nil, err
+	}
+
+	var githubActionsSA *serviceaccount.Account
+	if config.CreateServiceAccount {
+		githubActionsSA, err = newServiceAccountForDelegation(ctx, config)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Create the registry URL
+	registryURL := pulumi.Sprintf("%s-docker.pkg.dev/%s/%s", pulumi.String(config.RepositoryLocation), pulumi.String(config.GCPProject), registry.Name)
+
+	return &GithubGoogleRegistryStack{
+		RegistryURL:                 registryURL,
+		RepositoryPrincipalID:       repoPrincipalID,
+		RepositoryIAMMembers:        repoIAMMembers,
+		ProjectIAMMembers:           projectIAMMembers,
+		WorkloadIdentityPool:        workloadIdentityPool,
+		OidcProvider:                oidcProvider,
+		GitHubActionsServiceAccount: githubActionsSA,
+	}, nil
+}
+
+// grantPipelineIAM grants IAM permissions to the GitHub Actions pipeline
+func grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactregistry.Repository, repoPrincipalID pulumi.StringOutput) ([]*artifactregistry.RepositoryIamMember, []*projects.IAMMember, error) {
 	// Repository-level roles (assigned to the specific repository)
 	repoRoles := []string{
 		"roles/artifactregistry.writer",
@@ -80,7 +110,7 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 			Member:     repoPrincipalID,
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		repoIAMMembers = append(repoIAMMembers, member)
@@ -90,7 +120,7 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 	projectIAMMembers := make([]*projects.IAMMember, 0, len(projectRoles))
 
 	for _, role := range projectRoles {
-		bindingName := fmt.Sprintf("%s-proj-iam-%s", config.ResourcePrefix, role)
+		bindingName := fmt.Sprintf("%s-project-iam-%s", config.ResourcePrefix, role)
 
 		member, err := projects.NewIAMMember(ctx, bindingName, &projects.IAMMemberArgs{
 			Project: pulumi.String(config.GCPProject),
@@ -98,32 +128,13 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 			Member:  repoPrincipalID,
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		projectIAMMembers = append(projectIAMMembers, member)
 	}
 
-	var githubActionsSA *serviceaccount.Account
-	if config.CreateServiceAccount {
-		githubActionsSA, err = newServiceAccountForDelegation(ctx, config)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Create the registry URL
-	registryURL := pulumi.Sprintf("%s-docker.pkg.dev/%s/%s", pulumi.String(config.RepositoryLocation), pulumi.String(config.GCPProject), registry.Name)
-
-	return &GithubGoogleRegistryStack{
-		RegistryURL:                 registryURL,
-		RepositoryPrincipalID:       repoPrincipalID,
-		RepositoryIAMMembers:        repoIAMMembers,
-		ProjectIAMMembers:           projectIAMMembers,
-		WorkloadIdentityPool:        workloadIdentityPool,
-		OidcProvider:                oidcProvider,
-		GitHubActionsServiceAccount: githubActionsSA,
-	}, nil
+	return repoIAMMembers, projectIAMMembers, nil
 }
 
 func capToMax(identityProviderName string, maxLen int) string {
