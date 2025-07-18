@@ -178,6 +178,9 @@ func createSBOMsBucket(ctx *pulumi.Context, config *Config, repoPrincipalID pulu
 			"purpose":    pulumi.String("sbom-storage"),
 			"managed-by": pulumi.String("pulumi"),
 		},
+		// Enable Uniform Bucket Level Access (UBLA) for enhanced security
+		// This is required for SBOMs and prevents ACL-based access control
+		UniformBucketLevelAccess: pulumi.Bool(true),
 	})
 	if err != nil {
 		return nil, nil, err

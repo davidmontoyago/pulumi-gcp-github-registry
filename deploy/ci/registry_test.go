@@ -102,7 +102,8 @@ func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource
 		// Expected outputs: role, member, project
 	case "gcp:storage/bucket:Bucket":
 		outputs["name"] = args.Name
-		// Expected outputs: name, location, project, versioning, lifecycleRules, labels
+		outputs["uniformBucketLevelAccess"] = true
+		// Expected outputs: name, location, project, versioning, lifecycleRules, labels, uniformBucketLevelAccess
 	case "gcp:storage/bucketIAMMember:BucketIAMMember":
 		// Expected outputs: bucket, role, member
 	}
@@ -315,6 +316,15 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 
 		bucketMember := <-bucketMemberCh
 		assert.Equal(t, "principalSet://iam.googleapis.com/ci-with-a-long-prefix-github-act/attribute.repository/test/repo", bucketMember)
+
+		// Uniform Bucket Level Access is required for SBOMs
+		ublaCh := make(chan bool, 1)
+		infra.SBOMBucket.UniformBucketLevelAccess.ApplyT(func(ubla bool) bool {
+			ublaCh <- ubla
+			return ubla
+		})
+		ubla := <-ublaCh
+		assert.True(t, ubla, "Uniform Bucket Level Access should be enabled for SBOM buckets")
 
 		return nil
 	}, pulumi.WithMocks("project", "stack", &infraMocks{}))
