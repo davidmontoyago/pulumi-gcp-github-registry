@@ -290,7 +290,7 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 		})
 
 		bucketName := <-bucketNameCh
-		assert.Equal(t, "test-project-sbom", bucketName)
+		assert.Equal(t, "artifacts-test-project-sbom", bucketName)
 
 		// Test that bucket IAM member has correct role
 		bucketRoleCh := make(chan string, 1)

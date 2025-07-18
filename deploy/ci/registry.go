@@ -151,10 +151,9 @@ func grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactreg
 }
 
 // createSBOMsBucket creates a GCS bucket for storing SBOMs with proper IAM permissions
-// The bucket follows the default naming convention expected by Google Cloud Artifact Analysis
 func createSBOMsBucket(ctx *pulumi.Context, config *Config, repoPrincipalID pulumi.StringOutput) (*storage.Bucket, *storage.BucketIAMMember, error) {
-	// Default bucket name for SBOMs: {project-id}-sbom
-	bucketName := fmt.Sprintf("%s-sbom", config.GCPProject)
+	// Default bucket name for SBOMs: artifacts-{project-id}-sbom
+	bucketName := fmt.Sprintf("artifacts-%s-sbom", config.GCPProject)
 
 	// Create the bucket with best practices for security and compliance
 	bucket, err := storage.NewBucket(ctx, bucketName, &storage.BucketArgs{
