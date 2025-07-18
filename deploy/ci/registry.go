@@ -8,6 +8,7 @@ import (
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/iam"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/projects"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/serviceaccount"
+	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/storage"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -20,6 +21,8 @@ type GithubGoogleRegistryStack struct {
 	RepositoryIAMMembers        []*artifactregistry.RepositoryIamMember
 	ProjectIAMMembers           []*projects.IAMMember
 	GitHubActionsServiceAccount *serviceaccount.Account
+	SBOMBucket                  *storage.Bucket
+	SBOMBucketIAMMember         *storage.BucketIAMMember
 }
 
 // NewGithubGoogleRegistryStack creates CI/CD infrastructure for GitHub Actions
@@ -60,6 +63,12 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		return nil, err
 	}
 
+	// Create SBOM bucket for storing Software Bill of Materials
+	sbomBucket, sbomBucketIAMMember, err := createSBOMsBucket(ctx, config, repoPrincipalID)
+	if err != nil {
+		return nil, err
+	}
+
 	var githubActionsSA *serviceaccount.Account
 	if config.CreateServiceAccount {
 		githubActionsSA, err = newServiceAccountForDelegation(ctx, config)
@@ -79,6 +88,8 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		WorkloadIdentityPool:        workloadIdentityPool,
 		OidcProvider:                oidcProvider,
 		GitHubActionsServiceAccount: githubActionsSA,
+		SBOMBucket:                  sbomBucket,
+		SBOMBucketIAMMember:         sbomBucketIAMMember,
 	}, nil
 }
 
@@ -92,6 +103,7 @@ func grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactreg
 	// Project-level roles (assigned at the project level)
 	projectRoles := []string{
 		// SBOM generation for container images
+		// See: https://cloud.google.com/artifact-analysis/docs/generate-store-sboms
 		"roles/containeranalysis.notes.editor",
 		"roles/containeranalysis.occurrences.editor",
 	}
@@ -135,6 +147,53 @@ func grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactreg
 	}
 
 	return repoIAMMembers, projectIAMMembers, nil
+}
+
+// createSBOMsBucket creates a GCS bucket for storing SBOMs with proper IAM permissions
+// The bucket follows the default naming convention expected by Google Cloud Artifact Analysis
+func createSBOMsBucket(ctx *pulumi.Context, config *Config, repoPrincipalID pulumi.StringOutput) (*storage.Bucket, *storage.BucketIAMMember, error) {
+	// Default bucket name for SBOMs: {project-id}-sbom
+	bucketName := fmt.Sprintf("%s-sbom", config.GCPProject)
+
+	// Create the bucket with best practices for security and compliance
+	bucket, err := storage.NewBucket(ctx, bucketName, &storage.BucketArgs{
+		Name:         pulumi.String(bucketName),
+		Location:     pulumi.String(config.GCPRegion),
+		Project:      pulumi.String(config.GCPProject),
+		ForceDestroy: pulumi.Bool(false), // Prevent accidental deletion
+		Versioning: &storage.BucketVersioningArgs{
+			Enabled: pulumi.Bool(true), // Enable versioning for audit trail
+		},
+		LifecycleRules: storage.BucketLifecycleRuleArray{
+			&storage.BucketLifecycleRuleArgs{
+				Action: &storage.BucketLifecycleRuleActionArgs{
+					Type: pulumi.String("Delete"),
+				},
+				Condition: &storage.BucketLifecycleRuleConditionArgs{
+					Age: pulumi.Int(365), // Keep SBOMs for 1 year
+				},
+			},
+		},
+		Labels: pulumi.StringMap{
+			"purpose":    pulumi.String("sbom-storage"),
+			"managed-by": pulumi.String("pulumi"),
+		},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Grant object admin role to the repository principal for SBOM uploads
+	bucketIAMMember, err := storage.NewBucketIAMMember(ctx, fmt.Sprintf("%s-sbom-bucket-iam", config.ResourcePrefix), &storage.BucketIAMMemberArgs{
+		Bucket: bucket.Name,
+		Role:   pulumi.String("roles/storage.objectAdmin"),
+		Member: repoPrincipalID,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return bucket, bucketIAMMember, nil
 }
 
 func capToMax(identityProviderName string, maxLen int) string {

@@ -33,6 +33,7 @@ func main() {
 		ctx.Export("workloadIdentityProviderID", pulumi.ToSecret(ciInfra.OidcProvider.ID()))
 		ctx.Export("workloadIdentityProviderCondition", ciInfra.OidcProvider.AttributeCondition)
 		ctx.Export("repositoryWorkloadID", ciInfra.RepositoryPrincipalID)
+		ctx.Export("sbomBucketName", ciInfra.SBOMBucket.Name)
 
 		if config.CreateServiceAccount {
 			ctx.Export("serviceAccountEmail", pulumi.ToSecret(ciInfra.GitHubActionsServiceAccount.Email))

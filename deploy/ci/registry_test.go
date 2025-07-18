@@ -62,6 +62,19 @@ func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource
 	//   - role: string (IAM role, e.g., "roles/containeranalysis.notes.editor")
 	//   - member: string (principal to bind, e.g., "principalSet://...")
 	//   - project: string (project identifier)
+	//
+	// gcp:storage/bucket:Bucket
+	//   - name: string (bucket name)
+	//   - location: string (bucket location)
+	//   - project: string (GCP project ID)
+	//   - versioning: map[string]interface{} (versioning configuration)
+	//   - lifecycleRules: array (lifecycle rules configuration)
+	//   - labels: map[string]string (bucket labels)
+	//
+	// gcp:storage/bucketIAMMember:BucketIAMMember
+	//   - bucket: string (bucket name reference)
+	//   - role: string (IAM role, e.g., "roles/storage.objectAdmin")
+	//   - member: string (principal to bind, e.g., "principalSet://...")
 	outputs := map[string]interface{}{}
 	for k, v := range args.Inputs {
 		outputs[string(k)] = v
@@ -87,6 +100,11 @@ func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource
 		// Expected outputs: role, member, repository
 	case "gcp:projects/iAMMember:IAMMember":
 		// Expected outputs: role, member, project
+	case "gcp:storage/bucket:Bucket":
+		outputs["name"] = args.Name
+		// Expected outputs: name, location, project, versioning, lifecycleRules, labels
+	case "gcp:storage/bucketIAMMember:BucketIAMMember":
+		// Expected outputs: bucket, role, member
 	}
 
 	return args.Name + "_id", resource.NewPropertyMapFromMap(outputs), nil
@@ -256,6 +274,47 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 
 		secondProjectRole := <-roleCh
 		assert.Equal(t, secondProjectRole, "roles/containeranalysis.occurrences.editor")
+
+		// 5. SBOM bucket creation and IAM
+
+		// Test that SBOM bucket is created with expected default name
+		assert.NotNil(t, infra.SBOMBucket)
+		assert.NotNil(t, infra.SBOMBucketIAMMember)
+
+		bucketNameCh := make(chan string, 1)
+
+		infra.SBOMBucket.Name.ApplyT(func(name string) string {
+			bucketNameCh <- name
+
+			return name
+		})
+
+		bucketName := <-bucketNameCh
+		assert.Equal(t, "test-project-sbom", bucketName)
+
+		// Test that bucket IAM member has correct role
+		bucketRoleCh := make(chan string, 1)
+
+		infra.SBOMBucketIAMMember.Role.ApplyT(func(role string) string {
+			bucketRoleCh <- role
+
+			return role
+		})
+
+		bucketRole := <-bucketRoleCh
+		assert.Equal(t, "roles/storage.objectAdmin", bucketRole)
+
+		// Test that bucket IAM member has correct principal
+		bucketMemberCh := make(chan string, 1)
+
+		infra.SBOMBucketIAMMember.Member.ApplyT(func(member string) string {
+			bucketMemberCh <- member
+
+			return member
+		})
+
+		bucketMember := <-bucketMemberCh
+		assert.Equal(t, "principalSet://iam.googleapis.com/ci-with-a-long-prefix-github-act/attribute.repository/test/repo", bucketMember)
 
 		return nil
 	}, pulumi.WithMocks("project", "stack", &infraMocks{}))
