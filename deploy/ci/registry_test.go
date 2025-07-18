@@ -218,6 +218,7 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 		assert.Equal(t, firstMember, "principalSet://iam.googleapis.com/ci-with-a-long-prefix-github-act/attribute.repository/test/repo")
 
 		roleCh := make(chan string, 1)
+
 		infra.RepositoryIAMMembers[0].Role.ApplyT(func(role string) string {
 			roleCh <- role
 

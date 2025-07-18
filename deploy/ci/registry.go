@@ -60,9 +60,11 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		"roles/containeranalysis.occurrences.editor",
 	}
 
-	var repoIAMMembers []*artifactregistry.RepositoryIamMember
+	repoIAMMembers := make([]*artifactregistry.RepositoryIamMember, 0, len(pipelineRoles))
+
 	for _, role := range pipelineRoles {
 		bindingName := fmt.Sprintf("%s-iam-%s", config.ResourcePrefix, role)
+
 		member, err := artifactregistry.NewRepositoryIamMember(ctx, bindingName, &artifactregistry.RepositoryIamMemberArgs{
 			Repository: registry.Name,
 			Location:   pulumi.String(config.RepositoryLocation),
@@ -73,6 +75,7 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		if err != nil {
 			return nil, err
 		}
+
 		repoIAMMembers = append(repoIAMMembers, member)
 	}
 
