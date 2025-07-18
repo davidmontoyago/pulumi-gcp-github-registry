@@ -57,6 +57,11 @@ func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource
 	//   - role: string (IAM role, e.g., "roles/artifactregistry.writer")
 	//   - member: string (principal to bind, e.g., "serviceAccount:...")
 	//   - repository: string (repository name reference)
+	//
+	// gcp:projects/iAMMember:IAMMember
+	//   - role: string (IAM role, e.g., "roles/containeranalysis.notes.editor")
+	//   - member: string (principal to bind, e.g., "principalSet://...")
+	//   - project: string (project identifier)
 	outputs := map[string]interface{}{}
 	for k, v := range args.Inputs {
 		outputs[string(k)] = v
@@ -80,6 +85,8 @@ func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource
 		// Expected outputs: role, member, serviceAccountId
 	case "gcp:artifactregistry/repositoryIamMember:RepositoryIamMember":
 		// Expected outputs: role, member, repository
+	case "gcp:projects/iAMMember:IAMMember":
+		// Expected outputs: role, member, project
 	}
 
 	return args.Name + "_id", resource.NewPropertyMapFromMap(outputs), nil
@@ -192,6 +199,7 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 
 		assert.NotNil(t, infra.RepositoryPrincipalID)
 		assert.NotNil(t, infra.RepositoryIAMMembers)
+		assert.NotNil(t, infra.ProjectIAMMembers)
 
 		principalCh := make(chan string, 1)
 
@@ -204,7 +212,7 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 		principal := <-principalCh
 		assert.Equal(t, principal, "principalSet://iam.googleapis.com/ci-with-a-long-prefix-github-act/attribute.repository/test/repo")
 
-		// ------- Registry writer IAM -------
+		// ------- Repository-level IAM -------
 
 		memberCh := make(chan string, 1)
 
@@ -228,16 +236,26 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 		firstRole := <-roleCh
 		assert.Equal(t, firstRole, "roles/artifactregistry.writer")
 
-		// ------- SBOM IAM -------
+		// ------- Project-level IAM -------
 
-		infra.RepositoryIAMMembers[1].Role.ApplyT(func(role string) string {
+		infra.ProjectIAMMembers[0].Role.ApplyT(func(role string) string {
 			roleCh <- role
 
 			return role
 		})
 
-		secondRole := <-roleCh
-		assert.Equal(t, secondRole, "roles/containeranalysis.notes.editor")
+		// assert SBOM generation roles
+		projectRole := <-roleCh
+		assert.Equal(t, projectRole, "roles/containeranalysis.notes.editor")
+
+		infra.ProjectIAMMembers[1].Role.ApplyT(func(role string) string {
+			roleCh <- role
+
+			return role
+		})
+
+		secondProjectRole := <-roleCh
+		assert.Equal(t, secondProjectRole, "roles/containeranalysis.occurrences.editor")
 
 		return nil
 	}, pulumi.WithMocks("project", "stack", &infraMocks{}))

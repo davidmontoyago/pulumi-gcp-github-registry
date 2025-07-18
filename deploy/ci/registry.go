@@ -6,6 +6,7 @@ import (
 
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/artifactregistry"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/iam"
+	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/projects"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/serviceaccount"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -17,6 +18,7 @@ type GithubGoogleRegistryStack struct {
 	OidcProvider                *iam.WorkloadIdentityPoolProvider
 	RepositoryPrincipalID       pulumi.StringOutput
 	RepositoryIAMMembers        []*artifactregistry.RepositoryIamMember
+	ProjectIAMMembers           []*projects.IAMMember
 	GitHubActionsServiceAccount *serviceaccount.Account
 }
 
@@ -52,18 +54,23 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		repoName,
 	)
 
-	pipelineRoles := []string{
+	// Repository-level roles (assigned to the specific repository)
+	repoRoles := []string{
 		"roles/artifactregistry.writer",
+	}
 
+	// Project-level roles (assigned at the project level)
+	projectRoles := []string{
 		// SBOM generation for container images
 		"roles/containeranalysis.notes.editor",
 		"roles/containeranalysis.occurrences.editor",
 	}
 
-	repoIAMMembers := make([]*artifactregistry.RepositoryIamMember, 0, len(pipelineRoles))
+	// Assign repository-level IAM roles
+	repoIAMMembers := make([]*artifactregistry.RepositoryIamMember, 0, len(repoRoles))
 
-	for _, role := range pipelineRoles {
-		bindingName := fmt.Sprintf("%s-iam-%s", config.ResourcePrefix, role)
+	for _, role := range repoRoles {
+		bindingName := fmt.Sprintf("%s-repo-iam-%s", config.ResourcePrefix, role)
 
 		member, err := artifactregistry.NewRepositoryIamMember(ctx, bindingName, &artifactregistry.RepositoryIamMemberArgs{
 			Repository: registry.Name,
@@ -77,6 +84,24 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		}
 
 		repoIAMMembers = append(repoIAMMembers, member)
+	}
+
+	// Assign project-level IAM roles
+	projectIAMMembers := make([]*projects.IAMMember, 0, len(projectRoles))
+
+	for _, role := range projectRoles {
+		bindingName := fmt.Sprintf("%s-proj-iam-%s", config.ResourcePrefix, role)
+
+		member, err := projects.NewIAMMember(ctx, bindingName, &projects.IAMMemberArgs{
+			Project: pulumi.String(config.GCPProject),
+			Role:    pulumi.String(role),
+			Member:  repoPrincipalID,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		projectIAMMembers = append(projectIAMMembers, member)
 	}
 
 	var githubActionsSA *serviceaccount.Account
@@ -94,6 +119,7 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 		RegistryURL:                 registryURL,
 		RepositoryPrincipalID:       repoPrincipalID,
 		RepositoryIAMMembers:        repoIAMMembers,
+		ProjectIAMMembers:           projectIAMMembers,
 		WorkloadIdentityPool:        workloadIdentityPool,
 		OidcProvider:                oidcProvider,
 		GitHubActionsServiceAccount: githubActionsSA,
