@@ -37,6 +37,12 @@ See:
    - Optional service account and binding to workload identity pool
    - Configurable role assignments
 
+4. **SBOM Storage Bucket**
+   - Dedicated Google Cloud Storage bucket for Software Bill of Materials (SBOMs)
+   - Versioning enabled for audit trail and compliance
+   - Lifecycle management (1-year retention policy)
+   - Uniform Bucket Level Access (UBLA) for enhanced security
+
 ## Install
 
 ```bash
@@ -69,6 +75,7 @@ func main() {
 
         // Export outputs for GitHub Actions
         ctx.Export("registryURL", ciInfra.RegistryURL)
+        ctx.Export("sbomBucketName", ciInfra.SBOMBucket.Name)
         ctx.Export("workloadIdentityProviderID", pulumi.ToSecret(ciInfra.OidcProvider.ID()))
         ctx.Export("repositoryWorkloadID", ciInfra.RepositoryPrincipalID)
 
@@ -185,6 +192,44 @@ jobs:
         docker push ${{ env.REGISTRY_URL }}/app:${{ github.sha }}
 ```
 
+## SBOM Storage and Analysis
+
+This component creates a dedicated GCS bucket for storing Software Bill of Materials (SBOMs) generated for every image. This enables compliance, security scanning, and vulnerability management for container images.
+
+### SBOM Bucket Features
+
+- **Automatic Creation**: A bucket named `artifacts-{project-id}-sbom` is created automatically
+- **Secure Access**: GitHub Actions workflows can upload SBOMs using the same workload identity federation
+- **Versioning**: All SBOMs are versioned for audit trail and compliance requirements
+- **Lifecycle Management**: SBOMs are automatically deleted after 1 year to manage storage costs
+
+### Generating SBOMs in Github Actions
+
+```yaml
+- name: Generate SBOM with Syft
+  uses: anchore/sbom-action@v0.19.0
+  with:
+    image: ${{ env.REGISTRY_URL }}/my-image:${{ github.sha }}
+    output-file: sbom.spdx.json
+    format: spdx-json
+- name: Upload SBOM to GAR
+  shell: bash
+    gcloud artifacts sbom load \
+      --source=sbom.spdx.json \
+      --destination=gs://artifacts-my-project-sbom \
+      --uri=${{ env.REGISTRY_URL }}/my-image:${{ github.sha }}
+```
+
+### Container Analysis Integration
+
+The component automatically grants the necessary IAM permissions for Google Cloud's Container Analysis service:
+
+- `roles/containeranalysis.notes.editor`: Create and manage vulnerability notes
+- `roles/containeranalysis.occurrences.editor`: Create and manage vulnerability occurrences
+- `roles/storage.bucketViewer`: Access to view bucket contents for analysis
+
+This enables integration with Google Cloud's vulnerability scanning and compliance tools.
+
 ## Security Features
 
 - **Workload Identity Federation**: Eliminates the need for long-lived service account keys
@@ -255,6 +300,7 @@ You can verify the repository scoping is working by:
 The component exports the following values for use in CI/CD pipelines:
 
 - `registryURL`: The full URL of the Artifact Registry repository
+- `sbomBucketName`: The name of the GCS bucket for SBOM storage
 - `serviceAccountEmail`: The email of the GitHub Actions service account
 - `workloadIdentityPoolID`: The ID of the workload identity pool **(marked as secret)**
 - `workloadIdentityProviderID`: The full provider ID for GitHub Actions authentication **(marked as secret)**
@@ -276,6 +322,7 @@ Current stack outputs (1):
     workloadIdentityPoolID     [secret]
     workloadIdentityProviderID [secret]
     registryURL                us-docker.pkg.dev/my-project/registry
+    sbomBucketName             artifacts-my-project-sbom
 
 $ pulumi stack output --show-secrets
 Current stack outputs (1):
@@ -283,4 +330,5 @@ Current stack outputs (1):
     workloadIdentityPoolID     projects/123456789/locations/global/workloadIdentityPools/ci-github-actions-pool
     workloadIdentityProviderID projects/123456789/locations/global/workloadIdentityPools/ci-github-actions-pool/providers/ci-github-actions-provider
     registryURL                us-docker.pkg.dev/my-project/registry
+    sbomBucketName             artifacts-my-project-sbom
 ```
