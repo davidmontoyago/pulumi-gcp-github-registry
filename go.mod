@@ -6,9 +6,9 @@ go 1.24.5
 
 require (
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/pulumi/pulumi-gcp/sdk/v8 v8.36.0
-	github.com/pulumi/pulumi/sdk/v3 v3.181.0
-	github.com/stretchr/testify v1.10.0
+	github.com/pulumi/pulumi-gcp/sdk/v8 v8.41.1
+	github.com/pulumi/pulumi/sdk/v3 v3.185.0
+	github.com/stretchr/testify v1.11.1
 )
 
 require (
