@@ -1,6 +1,6 @@
 # pulumi-gcp-github-registry
 
-[![develop](https://github.com/davidmontoyago/pulumi-gcp-github-registry/workflows/develop/badge.svg)](https://github.com/davidmontoyago/pulumi-gcp-github-registry/actions?query=workflow%3Adevelop)
+[![Develop](https://github.com/davidmontoyago/pulumi-gcp-github-registry/workflows/develop/badge.svg)](https://github.com/davidmontoyago/pulumi-gcp-github-registry/actions?query=workflow%3Adevelop) [![Go Coverage](https://raw.githubusercontent.com/wiki/davidmontoyago/pulumi-gcp-github-registry/coverage.svg)](https://raw.githack.com/wiki/davidmontoyago/pulumi-gcp-github-registry/coverage.html) [![Go Reference](https://pkg.go.dev/badge/github.com/davidmontoyago/pulumi-gcp-github-registry.svg)](https://pkg.go.dev/github.com/davidmontoyago/pulumi-gcp-github-registry)
 
 Pulumi Component to setup an artifact registry repository, an OIDC identity provider for Github Actions, and the IAM required to login and push docker images to the registry.
 

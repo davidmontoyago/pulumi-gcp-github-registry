@@ -319,10 +319,13 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 
 		// Uniform Bucket Level Access is required for SBOMs
 		ublaCh := make(chan bool, 1)
+
 		infra.SBOMBucket.UniformBucketLevelAccess.ApplyT(func(ubla bool) bool {
 			ublaCh <- ubla
+
 			return ubla
 		})
+
 		ubla := <-ublaCh
 		assert.True(t, ubla, "Uniform Bucket Level Access should be enabled for SBOM buckets")
 
