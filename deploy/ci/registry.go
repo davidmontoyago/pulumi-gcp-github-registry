@@ -4,6 +4,7 @@ package ci
 import (
 	"fmt"
 
+	namer "github.com/davidmontoyago/commodity-namer"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/artifactregistry"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/iam"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/projects"
@@ -14,6 +15,9 @@ import (
 
 // GithubGoogleRegistryStack represents the CI/CD infrastructure components
 type GithubGoogleRegistryStack struct {
+	pulumi.ResourceState
+	namer.Namer
+
 	RegistryURL                 pulumi.StringOutput
 	WorkloadIdentityPool        *iam.WorkloadIdentityPool
 	OidcProvider                *iam.WorkloadIdentityPoolProvider
@@ -23,31 +27,65 @@ type GithubGoogleRegistryStack struct {
 	GitHubActionsServiceAccount *serviceaccount.Account
 	SBOMBucket                  *storage.Bucket
 	SBOMBucketIAMMember         *storage.BucketIAMMember
+
+	repositoryName string
+	config         *Config
 }
 
 // NewGithubGoogleRegistryStack creates CI/CD infrastructure for GitHub Actions
-func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubGoogleRegistryStack, error) {
+func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config, opts ...pulumi.ResourceOption) (*GithubGoogleRegistryStack, error) {
 	// Set up Artifact Registry for Docker images
-	repositoryName := fmt.Sprintf("%s-%s", config.ResourcePrefix, config.RepositoryName)
-	repositoryName = capToMax(repositoryName, 63)
-
-	registry, err := artifactregistry.NewRepository(ctx, repositoryName, &artifactregistry.RepositoryArgs{
-		RepositoryId: pulumi.String(repositoryName),
-		Location:     pulumi.String(config.RepositoryLocation),
-		Project:      pulumi.String(config.GCPProject),
-		Description:  pulumi.String("CI/CD Docker image registry"),
-		Format:       pulumi.String("DOCKER"),
-	})
-	if err != nil {
-		return nil, err
+	registry := &GithubGoogleRegistryStack{
+		Namer:          namer.New(config.ResourcePrefix),
+		repositoryName: config.RepositoryName,
+		config:         config,
 	}
 
-	repoName := extractRepoName(config.AllowedRepoURL)
+	componentName := fmt.Sprintf("%s-%s", config.ResourcePrefix, config.RepositoryName)
+
+	err := ctx.RegisterComponentResource("pulumi-gcp-github-registry:ci:GithubGoogleRegistry", componentName, registry, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to register component resource: %w", err)
+	}
+
+	err = registry.deploy(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deploy component resources: %w", err)
+	}
+
+	return registry, nil
+}
+
+// NewGithubGoogleRegistryStack creates CI/CD infrastructure for GitHub Actions
+func (r *GithubGoogleRegistryStack) deploy(ctx *pulumi.Context) error {
+	repoResourceName := r.NewResourceName(r.repositoryName, "repo", 63)
+	// The input controls the ID, we just make sure it's valid
+	repositoryID := r.NewResourceName(r.repositoryName, "", 63)
+
+	registry, err := artifactregistry.NewRepository(ctx, repoResourceName, &artifactregistry.RepositoryArgs{
+		RepositoryId: pulumi.String(repositoryID),
+		Location:     pulumi.String(r.config.RepositoryLocation),
+		Project:      pulumi.String(r.config.GCPProject),
+		Description:  pulumi.String("CI/CD Docker image registry"),
+		Format:       pulumi.String("DOCKER"),
+		Labels: pulumi.StringMap{
+			"managed-by": pulumi.String("pulumi"),
+			"purpose":    pulumi.String("docker-images"),
+		},
+	},
+		pulumi.Parent(r),
+		pulumi.Protect(r.config.ProtectResources),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create artifact registry repository: %w", err)
+	}
+
+	repoName := extractRepoName(r.config.AllowedRepoURL)
 
 	// Create OIDC provider for GitHub Actions
-	oidcProvider, workloadIdentityPool, err := newGithubActionsOIDCProvider(ctx, config, repoName)
+	oidcProvider, workloadIdentityPool, err := r.newGithubActionsOIDCProvider(ctx, r.config, repoName)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to create OIDC provider for GitHub Actions: %w", err)
 	}
 
 	// Create service account and bind it to workload identity pool
@@ -58,43 +96,43 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config) (*GithubG
 	)
 
 	// Grant IAM permissions to the pipeline
-	repoIAMMembers, projectIAMMembers, err := grantPipelineIAM(ctx, config, registry, repoPrincipalID)
+	repoIAMMembers, projectIAMMembers, err := r.grantPipelineIAM(ctx, r.config, registry, repoPrincipalID)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to grant IAM permissions to the pipeline: %w", err)
 	}
 
 	// Create SBOM bucket for storing Software Bill of Materials
-	sbomBucket, sbomBucketIAMMember, err := createSBOMsBucket(ctx, config, repoPrincipalID)
+	sbomBucket, sbomBucketIAMMember, err := r.createSBOMsBucket(ctx, r.config, repoPrincipalID)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to create SBOM bucket: %w", err)
 	}
 
 	var githubActionsSA *serviceaccount.Account
-	if config.CreateServiceAccount {
-		githubActionsSA, err = newServiceAccountForDelegation(ctx, config)
+	if r.config.CreateServiceAccount {
+		githubActionsSA, err = r.newServiceAccountForDelegation(ctx, r.config)
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("failed to create service account for delegation: %w", err)
 		}
 	}
 
 	// Create the registry URL
-	registryURL := pulumi.Sprintf("%s-docker.pkg.dev/%s/%s", pulumi.String(config.RepositoryLocation), pulumi.String(config.GCPProject), registry.Name)
+	registryURL := pulumi.Sprintf("%s-docker.pkg.dev/%s/%s", pulumi.String(r.config.RepositoryLocation), pulumi.String(r.config.GCPProject), registry.RepositoryId)
 
-	return &GithubGoogleRegistryStack{
-		RegistryURL:                 registryURL,
-		RepositoryPrincipalID:       repoPrincipalID,
-		RepositoryIAMMembers:        repoIAMMembers,
-		ProjectIAMMembers:           projectIAMMembers,
-		WorkloadIdentityPool:        workloadIdentityPool,
-		OidcProvider:                oidcProvider,
-		GitHubActionsServiceAccount: githubActionsSA,
-		SBOMBucket:                  sbomBucket,
-		SBOMBucketIAMMember:         sbomBucketIAMMember,
-	}, nil
+	r.RegistryURL = registryURL
+	r.RepositoryPrincipalID = repoPrincipalID
+	r.RepositoryIAMMembers = repoIAMMembers
+	r.ProjectIAMMembers = projectIAMMembers
+	r.WorkloadIdentityPool = workloadIdentityPool
+	r.OidcProvider = oidcProvider
+	r.GitHubActionsServiceAccount = githubActionsSA
+	r.SBOMBucket = sbomBucket
+	r.SBOMBucketIAMMember = sbomBucketIAMMember
+
+	return nil
 }
 
 // grantPipelineIAM grants IAM permissions to the GitHub Actions pipeline
-func grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactregistry.Repository, repoPrincipalID pulumi.StringOutput) ([]*artifactregistry.RepositoryIamMember, []*projects.IAMMember, error) {
+func (r *GithubGoogleRegistryStack) grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactregistry.Repository, repoPrincipalID pulumi.StringOutput) ([]*artifactregistry.RepositoryIamMember, []*projects.IAMMember, error) {
 	// Repository-level roles (assigned to the specific repository)
 	repoRoles := []string{
 		"roles/artifactregistry.writer",
@@ -121,9 +159,9 @@ func grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactreg
 			Project:    pulumi.String(config.GCPProject),
 			Role:       pulumi.String(role),
 			Member:     repoPrincipalID,
-		})
+		}, pulumi.Parent(r))
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("failed to create repository IAM member: %w", err)
 		}
 
 		repoIAMMembers = append(repoIAMMembers, member)
@@ -139,9 +177,9 @@ func grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactreg
 			Project: pulumi.String(config.GCPProject),
 			Role:    pulumi.String(role),
 			Member:  repoPrincipalID,
-		})
+		}, pulumi.Parent(r))
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("failed to create project IAM member: %w", err)
 		}
 
 		projectIAMMembers = append(projectIAMMembers, member)
@@ -151,7 +189,7 @@ func grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactreg
 }
 
 // createSBOMsBucket creates a GCS bucket for storing SBOMs with proper IAM permissions
-func createSBOMsBucket(ctx *pulumi.Context, config *Config, repoPrincipalID pulumi.StringOutput) (*storage.Bucket, *storage.BucketIAMMember, error) {
+func (r *GithubGoogleRegistryStack) createSBOMsBucket(ctx *pulumi.Context, config *Config, repoPrincipalID pulumi.StringOutput) (*storage.Bucket, *storage.BucketIAMMember, error) {
 	// Default bucket name for SBOMs: artifacts-{project-id}-sbom
 	bucketName := fmt.Sprintf("artifacts-%s-sbom", config.GCPProject)
 
@@ -183,9 +221,9 @@ func createSBOMsBucket(ctx *pulumi.Context, config *Config, repoPrincipalID pulu
 		// Enable Uniform Bucket Level Access (UBLA) for enhanced security
 		// This is required for SBOMs and prevents ACL-based access control
 		UniformBucketLevelAccess: pulumi.Bool(true),
-	})
+	}, pulumi.Parent(r))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to create SBOM bucket: %w", err)
 	}
 
 	// Grant object admin role to the repository principal for SBOM uploads
@@ -193,9 +231,9 @@ func createSBOMsBucket(ctx *pulumi.Context, config *Config, repoPrincipalID pulu
 		Bucket: bucket.Name,
 		Role:   pulumi.String("roles/storage.objectAdmin"),
 		Member: repoPrincipalID,
-	})
+	}, pulumi.Parent(r))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to create SBOM bucket IAM member: %w", err)
 	}
 
 	return bucket, bucketIAMMember, nil
@@ -210,7 +248,7 @@ func capToMax(identityProviderName string, maxLen int) string {
 }
 
 // newGithubActionsOIDCProvider creates a new OIDC provider for GitHub Actions
-func newGithubActionsOIDCProvider(ctx *pulumi.Context, config *Config, repoName string) (*iam.WorkloadIdentityPoolProvider, *iam.WorkloadIdentityPool, error) {
+func (r *GithubGoogleRegistryStack) newGithubActionsOIDCProvider(ctx *pulumi.Context, config *Config, repoName string) (*iam.WorkloadIdentityPoolProvider, *iam.WorkloadIdentityPool, error) {
 	// Create OIDC workload identity pool for GitHub Actions
 	identityPoolName := fmt.Sprintf("%s-github-actions-pool", config.ResourcePrefix)
 	identityPoolName = capToMax(identityPoolName, 32)
@@ -221,9 +259,9 @@ func newGithubActionsOIDCProvider(ctx *pulumi.Context, config *Config, repoName 
 		DisplayName:            pulumi.String("GitHub Actions Workload Pool"),
 		Description:            pulumi.String("Workload identity pool for GitHub Actions"),
 		Disabled:               pulumi.Bool(false),
-	})
+	}, pulumi.Parent(r))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to create OIDC provider for GitHub Actions: %w", err)
 	}
 
 	// Create OIDC provider for GitHub Actions
@@ -255,16 +293,16 @@ func newGithubActionsOIDCProvider(ctx *pulumi.Context, config *Config, repoName 
 			IssuerUri: pulumi.String("https://token.actions.githubusercontent.com"),
 		},
 		AttributeCondition: pulumi.String(buildAttributeCondition(repoName, config)),
-	})
+	}, pulumi.Parent(r))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to create OIDC provider for GitHub Actions: %w", err)
 	}
 
 	return oidcProvider, identityPool, nil
 }
 
 // newServiceAccountForDelegation creates a service account and binds it to the workload identity pool
-func newServiceAccountForDelegation(ctx *pulumi.Context, config *Config) (*serviceaccount.Account, error) {
+func (r *GithubGoogleRegistryStack) newServiceAccountForDelegation(ctx *pulumi.Context, config *Config) (*serviceaccount.Account, error) {
 	// Create a service account for GitHub Actions
 	serviceAccountName := fmt.Sprintf("%s-github-actions-sa", config.ResourcePrefix)
 	serviceAccountName = capToMax(serviceAccountName, 30)
@@ -274,9 +312,9 @@ func newServiceAccountForDelegation(ctx *pulumi.Context, config *Config) (*servi
 		Project:     pulumi.String(config.GCPProject),
 		DisplayName: pulumi.String("GitHub Actions Service Account"),
 		Description: pulumi.String("Service account for GitHub Actions CI/CD"),
-	})
+	}, pulumi.Parent(r))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create service account for delegation: %w", err)
 	}
 
 	// Bind the service account to the workload identity pool
@@ -285,9 +323,9 @@ func newServiceAccountForDelegation(ctx *pulumi.Context, config *Config) (*servi
 		ServiceAccountId: githubActionsSA.Name,
 		Role:             pulumi.String("roles/iam.workloadIdentityUser"),
 		Member:           pulumi.Sprintf("serviceAccount:%s", githubActionsSA.Email),
-	})
+	}, pulumi.Parent(r))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create service account IAM member: %w", err)
 	}
 
 	return githubActionsSA, nil

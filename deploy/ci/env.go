@@ -26,6 +26,7 @@ type Config struct {
 	ResourcePrefix           string `envconfig:"RESOURCE_PREFIX" default:"ci"`
 	RepositoryName           string `envconfig:"REPOSITORY_NAME" default:"registry"`
 	CreateServiceAccount     bool   `envconfig:"CREATE_SERVICE_ACCOUNT" default:"false"`
+	ProtectResources         bool   `envconfig:"PROTECT_RESOURCES" default:"false"`
 }
 
 // LoadConfig loads configuration from environment variables
@@ -50,6 +51,7 @@ func LoadConfig() (*Config, error) {
 	log.Printf("  Resource Prefix: %s", config.ResourcePrefix)
 	log.Printf("  Repository Name: %s", config.RepositoryName)
 	log.Printf("  Allowed Repo URL: %s", config.AllowedRepoURL)
+	log.Printf("  Protect Resources: %t", config.ProtectResources)
 
 	if config.RepositoryOwner != "" {
 		log.Printf("  Repository Owner: %s", config.RepositoryOwner)
