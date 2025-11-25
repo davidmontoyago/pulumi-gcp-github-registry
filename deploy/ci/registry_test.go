@@ -106,6 +106,10 @@ func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource
 		// Expected outputs: name, location, project, versioning, lifecycleRules, labels, uniformBucketLevelAccess
 	case "gcp:storage/bucketIAMMember:BucketIAMMember":
 		// Expected outputs: bucket, role, member
+	case "gcp:organizations/project:Project":
+		outputs["name"] = args.Name
+		outputs["number"] = "123456789012" // Numeric project ID - used in workload identity provider ID
+		// Expected outputs: name, projectId, number, autoCreateNetwork
 	}
 
 	return args.Name + "_id", resource.NewPropertyMapFromMap(outputs), nil
@@ -328,6 +332,25 @@ func TestNewGithubGoogleRegistry(t *testing.T) {
 
 		ubla := <-ublaCh
 		assert.True(t, ubla, "Uniform Bucket Level Access should be enabled for SBOM buckets")
+
+		// 6. Workload Identity Pool Provider ID
+
+		// Test that WorkloadIdentityPoolProviderID is set with numeric project ID
+		assert.NotNil(t, infra.WorkloadIdentityPoolProviderID)
+
+		providerIDCh := make(chan string, 1)
+
+		infra.WorkloadIdentityPoolProviderID.ApplyT(func(id string) string {
+			providerIDCh <- id
+
+			return id
+		})
+
+		providerID := <-providerIDCh
+		// Should use numeric project ID (123456789012) not project name (test-project)
+		assert.Contains(t, providerID, "projects/123456789012/locations/global/workloadIdentityPools/")
+		// Both pool and provider names get truncated to 32 chars: "ci-with-a-long-prefix-github-act"
+		assert.Contains(t, providerID, "/workloadIdentityPools/ci-with-a-long-prefix-github-act/providers/ci-with-a-long-prefix-github-act")
 
 		return nil
 	}, pulumi.WithMocks("project", "stack", &infraMocks{}))

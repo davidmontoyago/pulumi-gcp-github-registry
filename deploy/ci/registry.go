@@ -7,6 +7,7 @@ import (
 	namer "github.com/davidmontoyago/commodity-namer"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/artifactregistry"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/iam"
+	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/organizations"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/projects"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/serviceaccount"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/storage"
@@ -27,6 +28,9 @@ type GithubGoogleRegistry struct {
 	GitHubActionsServiceAccount *serviceaccount.Account
 	SBOMBucket                  *storage.Bucket
 	SBOMBucketIAMMember         *storage.BucketIAMMember
+
+	// This is the resulting workload identity provider that must be passed in the Github auth action call
+	WorkloadIdentityPoolProviderID pulumi.StringOutput
 
 	repositoryName string
 	config         *Config
@@ -124,7 +128,23 @@ func (r *GithubGoogleRegistry) deploy(ctx *pulumi.Context) error {
 	// Create the registry URL
 	registryURL := pulumi.Sprintf("%s-docker.pkg.dev/%s/%s", pulumi.String(r.config.RepositoryLocation), pulumi.String(r.config.GCPProject), registry.RepositoryId)
 
+	// Create the workload identity provider ID to set in the Github auth action
+	// Numeric project ID is required
+	project, err := organizations.GetProject(ctx, "get-project", pulumi.ID(r.config.GCPProject), nil)
+	if err != nil {
+		return fmt.Errorf("failed to get project numeric ID: %w", err)
+	}
+
+	workloadIdentityPoolProviderID := pulumi.Sprintf(
+		"projects/%s/locations/global/workloadIdentityPools/%s/providers/%s",
+		project.Number,
+		workloadIdentityPool.WorkloadIdentityPoolId,
+		oidcProvider.WorkloadIdentityPoolProviderId,
+	)
+
+	// Set the outputs
 	r.RegistryURL = registryURL
+	r.WorkloadIdentityPoolProviderID = workloadIdentityPoolProviderID
 	r.RepositoryPrincipalID = repoPrincipalID
 	r.RepositoryIAMMembers = repoIAMMembers
 	r.ProjectIAMMembers = projectIAMMembers
