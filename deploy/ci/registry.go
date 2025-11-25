@@ -58,6 +58,11 @@ func NewGithubGoogleRegistry(ctx *pulumi.Context, config *Config, opts ...pulumi
 
 // NewGithubGoogleRegistry creates CI/CD infrastructure for GitHub Actions
 func (r *GithubGoogleRegistry) deploy(ctx *pulumi.Context) error {
+	registryAPI, err := r.enableRegistryAPI(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to enable Artifact Registry API: %w", err)
+	}
+
 	repoResourceName := r.NewResourceName(r.repositoryName, "repo", 63)
 	// The input controls the ID, we just make sure it's valid
 	repositoryID := r.NewResourceName(r.repositoryName, "", 63)
@@ -75,6 +80,7 @@ func (r *GithubGoogleRegistry) deploy(ctx *pulumi.Context) error {
 	},
 		pulumi.Parent(r),
 		pulumi.Protect(r.config.ProtectResources),
+		pulumi.DependsOn([]pulumi.Resource{registryAPI}),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create artifact registry repository: %w", err)
@@ -329,6 +335,23 @@ func (r *GithubGoogleRegistry) newServiceAccountForDelegation(ctx *pulumi.Contex
 	}
 
 	return githubActionsSA, nil
+}
+
+func (r *GithubGoogleRegistry) enableRegistryAPI(ctx *pulumi.Context) (*projects.Service, error) {
+	service, err := projects.NewService(ctx, r.NewResourceName("artifactregistry", "api", 63), &projects.ServiceArgs{
+		Project:                  pulumi.String(r.config.GCPProject),
+		Service:                  pulumi.String("artifactregistry.googleapis.com"),
+		DisableOnDestroy:         pulumi.Bool(false),
+		DisableDependentServices: pulumi.Bool(false),
+	},
+		pulumi.Parent(r),
+		pulumi.RetainOnDelete(true),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to enable Artifact Registry API: %w", err)
+	}
+
+	return service, nil
 }
 
 // extractRepoName extracts the repository name from a GitHub URL
