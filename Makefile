@@ -1,14 +1,14 @@
 .PHONY: build test clean local deploy image lint
 
-build:
+clean:
+	go mod tidy
+
+build: clean
 	go mod download
 	go build -o ./build/ ./...
 
-test:
+test: build
 	go test -v -race -count=1 -coverprofile=coverage.out ./...
-
-clean:
-	go mod tidy
 
 clean-pulumi:
 	pulumi plugin rm --all --yes
