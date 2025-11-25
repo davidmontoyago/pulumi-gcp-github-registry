@@ -40,7 +40,7 @@ type GithubGoogleRegistry struct {
 func NewGithubGoogleRegistry(ctx *pulumi.Context, config *Config, opts ...pulumi.ResourceOption) (*GithubGoogleRegistry, error) {
 	// Set up Artifact Registry for Docker images
 	registry := &GithubGoogleRegistry{
-		Namer:          namer.New(config.ResourcePrefix),
+		Namer:          namer.New(config.ResourcePrefix, namer.WithReplace()),
 		repositoryName: config.RepositoryName,
 		config:         config,
 	}
@@ -62,9 +62,14 @@ func NewGithubGoogleRegistry(ctx *pulumi.Context, config *Config, opts ...pulumi
 
 // NewGithubGoogleRegistry creates CI/CD infrastructure for GitHub Actions
 func (r *GithubGoogleRegistry) deploy(ctx *pulumi.Context) error {
-	registryAPI, err := r.enableRegistryAPI(ctx)
+	registryAPI, err := r.enableRegistryAPI(ctx, "artifactregistry", "artifactregistry.googleapis.com")
 	if err != nil {
 		return fmt.Errorf("failed to enable Artifact Registry API: %w", err)
+	}
+	// container analysis will be required when uploading the SBOM via gcloud artifacts sbom load
+	_, err = r.enableRegistryAPI(ctx, "containeranalysis", "containeranalysis.googleapis.com")
+	if err != nil {
+		return fmt.Errorf("failed to enable Container Analysis API: %w", err)
 	}
 
 	repoResourceName := r.NewResourceName(r.repositoryName, "repo", 63)
@@ -357,10 +362,10 @@ func (r *GithubGoogleRegistry) newServiceAccountForDelegation(ctx *pulumi.Contex
 	return githubActionsSA, nil
 }
 
-func (r *GithubGoogleRegistry) enableRegistryAPI(ctx *pulumi.Context) (*projects.Service, error) {
-	service, err := projects.NewService(ctx, r.NewResourceName("artifactregistry", "api", 63), &projects.ServiceArgs{
+func (r *GithubGoogleRegistry) enableRegistryAPI(ctx *pulumi.Context, name, api string) (*projects.Service, error) {
+	service, err := projects.NewService(ctx, r.NewResourceName(name, "api", 63), &projects.ServiceArgs{
 		Project:                  pulumi.String(r.config.GCPProject),
-		Service:                  pulumi.String("artifactregistry.googleapis.com"),
+		Service:                  pulumi.String(api),
 		DisableOnDestroy:         pulumi.Bool(false),
 		DisableDependentServices: pulumi.Bool(false),
 	},
@@ -368,7 +373,7 @@ func (r *GithubGoogleRegistry) enableRegistryAPI(ctx *pulumi.Context) (*projects
 		pulumi.RetainOnDelete(true),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enable Artifact Registry API: %w", err)
+		return nil, fmt.Errorf("failed to enable %s API: %w", name, err)
 	}
 
 	return service, nil
