@@ -115,7 +115,7 @@ func (m *infraMocks) Call(_ pulumi.MockCallArgs) (resource.PropertyMap, error) {
 	return resource.PropertyMap{}, nil
 }
 
-func TestNewGithubGoogleRegistryStack(t *testing.T) {
+func TestNewGithubGoogleRegistry(t *testing.T) {
 	t.Parallel()
 
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
@@ -132,7 +132,7 @@ func TestNewGithubGoogleRegistryStack(t *testing.T) {
 			RepositoryID:             "1234567890",
 		}
 
-		infra, err := ci.NewGithubGoogleRegistryStack(ctx, config)
+		infra, err := ci.NewGithubGoogleRegistry(ctx, config)
 		require.NoError(t, err)
 
 		// 1. Workload identity pool config

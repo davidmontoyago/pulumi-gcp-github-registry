@@ -7,7 +7,6 @@ build:
 test:
 	go test -v -race -count=1 -coverprofile=coverage.out ./...
 
-# Clean up build artifacts
 clean:
 	go mod tidy
 

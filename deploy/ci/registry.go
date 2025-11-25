@@ -13,8 +13,8 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// GithubGoogleRegistryStack represents the CI/CD infrastructure components
-type GithubGoogleRegistryStack struct {
+// GithubGoogleRegistry represents the CI/CD infrastructure components
+type GithubGoogleRegistry struct {
 	pulumi.ResourceState
 	namer.Namer
 
@@ -32,10 +32,10 @@ type GithubGoogleRegistryStack struct {
 	config         *Config
 }
 
-// NewGithubGoogleRegistryStack creates CI/CD infrastructure for GitHub Actions
-func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config, opts ...pulumi.ResourceOption) (*GithubGoogleRegistryStack, error) {
+// NewGithubGoogleRegistry creates CI/CD infrastructure for GitHub Actions
+func NewGithubGoogleRegistry(ctx *pulumi.Context, config *Config, opts ...pulumi.ResourceOption) (*GithubGoogleRegistry, error) {
 	// Set up Artifact Registry for Docker images
-	registry := &GithubGoogleRegistryStack{
+	registry := &GithubGoogleRegistry{
 		Namer:          namer.New(config.ResourcePrefix),
 		repositoryName: config.RepositoryName,
 		config:         config,
@@ -56,8 +56,8 @@ func NewGithubGoogleRegistryStack(ctx *pulumi.Context, config *Config, opts ...p
 	return registry, nil
 }
 
-// NewGithubGoogleRegistryStack creates CI/CD infrastructure for GitHub Actions
-func (r *GithubGoogleRegistryStack) deploy(ctx *pulumi.Context) error {
+// NewGithubGoogleRegistry creates CI/CD infrastructure for GitHub Actions
+func (r *GithubGoogleRegistry) deploy(ctx *pulumi.Context) error {
 	repoResourceName := r.NewResourceName(r.repositoryName, "repo", 63)
 	// The input controls the ID, we just make sure it's valid
 	repositoryID := r.NewResourceName(r.repositoryName, "", 63)
@@ -132,7 +132,7 @@ func (r *GithubGoogleRegistryStack) deploy(ctx *pulumi.Context) error {
 }
 
 // grantPipelineIAM grants IAM permissions to the GitHub Actions pipeline
-func (r *GithubGoogleRegistryStack) grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactregistry.Repository, repoPrincipalID pulumi.StringOutput) ([]*artifactregistry.RepositoryIamMember, []*projects.IAMMember, error) {
+func (r *GithubGoogleRegistry) grantPipelineIAM(ctx *pulumi.Context, config *Config, registry *artifactregistry.Repository, repoPrincipalID pulumi.StringOutput) ([]*artifactregistry.RepositoryIamMember, []*projects.IAMMember, error) {
 	// Repository-level roles (assigned to the specific repository)
 	repoRoles := []string{
 		"roles/artifactregistry.writer",
@@ -189,7 +189,7 @@ func (r *GithubGoogleRegistryStack) grantPipelineIAM(ctx *pulumi.Context, config
 }
 
 // createSBOMsBucket creates a GCS bucket for storing SBOMs with proper IAM permissions
-func (r *GithubGoogleRegistryStack) createSBOMsBucket(ctx *pulumi.Context, config *Config, repoPrincipalID pulumi.StringOutput) (*storage.Bucket, *storage.BucketIAMMember, error) {
+func (r *GithubGoogleRegistry) createSBOMsBucket(ctx *pulumi.Context, config *Config, repoPrincipalID pulumi.StringOutput) (*storage.Bucket, *storage.BucketIAMMember, error) {
 	// Default bucket name for SBOMs: artifacts-{project-id}-sbom
 	bucketName := fmt.Sprintf("artifacts-%s-sbom", config.GCPProject)
 
@@ -248,7 +248,7 @@ func capToMax(identityProviderName string, maxLen int) string {
 }
 
 // newGithubActionsOIDCProvider creates a new OIDC provider for GitHub Actions
-func (r *GithubGoogleRegistryStack) newGithubActionsOIDCProvider(ctx *pulumi.Context, config *Config, repoName string) (*iam.WorkloadIdentityPoolProvider, *iam.WorkloadIdentityPool, error) {
+func (r *GithubGoogleRegistry) newGithubActionsOIDCProvider(ctx *pulumi.Context, config *Config, repoName string) (*iam.WorkloadIdentityPoolProvider, *iam.WorkloadIdentityPool, error) {
 	// Create OIDC workload identity pool for GitHub Actions
 	identityPoolName := fmt.Sprintf("%s-github-actions-pool", config.ResourcePrefix)
 	identityPoolName = capToMax(identityPoolName, 32)
@@ -302,7 +302,7 @@ func (r *GithubGoogleRegistryStack) newGithubActionsOIDCProvider(ctx *pulumi.Con
 }
 
 // newServiceAccountForDelegation creates a service account and binds it to the workload identity pool
-func (r *GithubGoogleRegistryStack) newServiceAccountForDelegation(ctx *pulumi.Context, config *Config) (*serviceaccount.Account, error) {
+func (r *GithubGoogleRegistry) newServiceAccountForDelegation(ctx *pulumi.Context, config *Config) (*serviceaccount.Account, error) {
 	// Create a service account for GitHub Actions
 	serviceAccountName := fmt.Sprintf("%s-github-actions-sa", config.ResourcePrefix)
 	serviceAccountName = capToMax(serviceAccountName, 30)
