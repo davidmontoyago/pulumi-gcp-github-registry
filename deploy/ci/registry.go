@@ -257,7 +257,7 @@ func (r *GithubGoogleRegistry) createSBOMsBucket(ctx *pulumi.Context, config *Co
 					Type: pulumi.String("Delete"),
 				},
 				Condition: &storage.BucketLifecycleRuleConditionArgs{
-					Age: pulumi.Int(365), // Keep SBOMs for 1 year
+					Age: pulumi.Int(config.SBOMRetentionDays), // Keep SBOMs for configured days
 				},
 			},
 		},

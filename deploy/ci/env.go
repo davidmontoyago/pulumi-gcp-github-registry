@@ -29,8 +29,10 @@ type Config struct {
 	ProtectResources         bool   `envconfig:"PROTECT_RESOURCES" default:"false"`
 	// Number of recent images to retain
 	RecentImageRetentionCount int `envconfig:"RECENT_IMAGE_RETENTION_COUNT" default:"10"`
-	// Number of days after which old images are deleted
+	// Number of days (in duration format) after which old images are deleted
 	OldImageDeletionDays string `envconfig:"OLD_IMAGE_DELETION_DAYS" default:"30d"`
+	// Number of days after which SBOMs are deleted
+	SBOMRetentionDays int `envconfig:"SBOM_RETENTION_DAYS" default:"365"`
 }
 
 // LoadConfig loads configuration from environment variables
@@ -57,7 +59,8 @@ func LoadConfig() (*Config, error) {
 	log.Printf("  Allowed Repo URL: %s", config.AllowedRepoURL)
 	log.Printf("  Protect Resources: %t", config.ProtectResources)
 	log.Printf("  Recent Image Retention Count: %d", config.RecentImageRetentionCount)
-	log.Printf("  Old Image Deletion Days: %d", config.OldImageDeletionDays)
+	log.Printf("  Old Image Deletion Days: %s", config.OldImageDeletionDays)
+	log.Printf("  SBOM Retention Days: %d", config.SBOMRetentionDays)
 
 	if config.RepositoryOwner != "" {
 		log.Printf("  Repository Owner: %s", config.RepositoryOwner)
