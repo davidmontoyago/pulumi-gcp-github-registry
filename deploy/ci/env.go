@@ -27,6 +27,10 @@ type Config struct {
 	RepositoryName           string `envconfig:"REPOSITORY_NAME" default:"registry"`
 	CreateServiceAccount     bool   `envconfig:"CREATE_SERVICE_ACCOUNT" default:"false"`
 	ProtectResources         bool   `envconfig:"PROTECT_RESOURCES" default:"false"`
+	// Number of recent images to retain
+	RecentImageRetentionCount int `envconfig:"RECENT_IMAGE_RETENTION_COUNT" default:"10"`
+	// Number of days after which old images are deleted
+	OldImageDeletionDays string `envconfig:"OLD_IMAGE_DELETION_DAYS" default:"30d"`
 }
 
 // LoadConfig loads configuration from environment variables
@@ -52,6 +56,8 @@ func LoadConfig() (*Config, error) {
 	log.Printf("  Repository Name: %s", config.RepositoryName)
 	log.Printf("  Allowed Repo URL: %s", config.AllowedRepoURL)
 	log.Printf("  Protect Resources: %t", config.ProtectResources)
+	log.Printf("  Recent Image Retention Count: %d", config.RecentImageRetentionCount)
+	log.Printf("  Old Image Deletion Days: %d", config.OldImageDeletionDays)
 
 	if config.RepositoryOwner != "" {
 		log.Printf("  Repository Owner: %s", config.RepositoryOwner)
