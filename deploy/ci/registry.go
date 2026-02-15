@@ -86,6 +86,24 @@ func (r *GithubGoogleRegistry) deploy(ctx *pulumi.Context) error {
 			"managed-by": pulumi.String("pulumi"),
 			"purpose":    pulumi.String("docker-images"),
 		},
+
+		CleanupPolicies: &artifactregistry.RepositoryCleanupPolicyArray{
+			&artifactregistry.RepositoryCleanupPolicyArgs{
+				Id:     pulumi.String("keep-recent-versions"),
+				Action: pulumi.String("KEEP"),
+				MostRecentVersions: &artifactregistry.RepositoryCleanupPolicyMostRecentVersionsArgs{
+					KeepCount: pulumi.Int(r.config.RecentImageRetentionCount), // keep the X most recent versions
+				},
+			},
+			&artifactregistry.RepositoryCleanupPolicyArgs{
+				Id:     pulumi.String("delete-old-versions"),
+				Action: pulumi.String("DELETE"),
+				Condition: &artifactregistry.RepositoryCleanupPolicyConditionArgs{
+					OlderThan: pulumi.String(r.config.OldImageDeletionDays), // delete versions older than configured days
+					TagState:  pulumi.String("ANY"),
+				},
+			},
+		},
 	},
 		pulumi.Parent(r),
 		pulumi.Protect(r.config.ProtectResources),
