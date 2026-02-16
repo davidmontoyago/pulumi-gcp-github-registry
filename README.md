@@ -26,6 +26,7 @@ See:
    - Docker image storage for CI/CD builds
    - Configured with appropriate IAM permissions
    - Region-specific or multi-region deployment
+   - Automatic image cleanup policy
 
 2. **Workload Identity Federation**
    - OIDC-based authentication for GitHub Actions
@@ -88,19 +89,22 @@ func main() {
 
 The component uses environment variables for configuration:
 
-| Variable                      | Description                                                    | Required | Default                                                        |
-| ----------------------------- | -------------------------------------------------------------- | -------- | -------------------------------------------------------------- |
-| `GCP_PROJECT`                 | GCP Project ID                                                 | Yes      | -                                                              |
-| `GCP_REGION`                  | GCP Region for resources                                       | Yes      | -                                                              |
-| `REPOSITORY_LOCATION`         | Artifact Registry location                                     | No       | Value of `GCP_REGION`                                          |
-| `ALLOWED_REPO_URL`            | GitHub repository URL for workload identity access             | No       | `https://github.com/davidmontoyago/pulumi-gcp-github-registry` |
-| `REPOSITORY_OWNER`            | GitHub repository owner (username/org) for additional security | No       | -                                                              |
-| `REPOSITORY_OWNER_ID`         | GitHub repository owner numeric ID (recommended for security)  | No       | -                                                              |
-| `REPOSITORY_ID`               | GitHub repository numeric ID (recommended for security)        | No       | -                                                              |
-| `IDENTITY_POOL_PROVIDER_NAME` | Workload identity pool provider name (max 32 chars)            | No       | `github-actions-provider`                                      |
-| `RESOURCE_PREFIX`             | Prefix for resource names                                      | No       | `ci`                                                           |
-| `REPOSITORY_NAME`             | Artifact Registry repository name                              | No       | `registry`                                                     |
-| `CREATE_SERVICE_ACCOUNT`      | Whether to create a GitHub Actions service account             | No       | `false`                                                        |
+| Variable                       | Description                                                    | Required | Default                                                        |
+| ------------------------------ | -------------------------------------------------------------- | -------- | -------------------------------------------------------------- |
+| `GCP_PROJECT`                  | GCP Project ID                                                 | Yes      | -                                                              |
+| `GCP_REGION`                   | GCP Region for resources                                       | Yes      | -                                                              |
+| `REPOSITORY_LOCATION`          | Artifact Registry location                                     | No       | Value of `GCP_REGION`                                          |
+| `ALLOWED_REPO_URL`             | GitHub repository URL for workload identity access             | No       | `https://github.com/davidmontoyago/pulumi-gcp-github-registry` |
+| `REPOSITORY_OWNER`             | GitHub repository owner (username/org) for additional security | No       | -                                                              |
+| `REPOSITORY_OWNER_ID`          | GitHub repository owner numeric ID (recommended for security)  | No       | -                                                              |
+| `REPOSITORY_ID`                | GitHub repository numeric ID (recommended for security)        | No       | -                                                              |
+| `IDENTITY_POOL_PROVIDER_NAME`  | Workload identity pool provider name (max 32 chars)            | No       | `github-actions-provider`                                      |
+| `RESOURCE_PREFIX`              | Prefix for resource names                                      | No       | `ci`                                                           |
+| `REPOSITORY_NAME`              | Artifact Registry repository name                              | No       | `registry`                                                     |
+| `CREATE_SERVICE_ACCOUNT`       | Whether to create a GitHub Actions service account             | No       | `false`                                                        |
+| `RECENT_IMAGE_RETENTION_COUNT` | Number of recent images to retain                              | No       | `10`                                                           |
+| `OLD_IMAGE_DELETION_DAYS`      | Duration after which old images are deleted (e.g. `30d`)       | No       | `30d`                                                          |
+| `SBOM_RETENTION_DAYS`          | Number of days after which SBOMs are deleted                   | No       | `365`                                                          |
 
 ## GitHub Actions Integration
 
